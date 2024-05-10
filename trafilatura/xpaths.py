@@ -28,7 +28,7 @@ BODY_XPATH = [XPath(x) for x in (
     or @id="articleContent" or contains(@class, "ArticleContent") or
     contains(@class, "page-content") or contains(@class, "text-content") or
     contains(@id, "body-text") or contains(@class, "body-text") or
-    contains(@class, "article__container") or contains(@id, "art-content") or contains(@class, "art-content")][1]''',
+    contains(@class, "article__container") or contains(@id, "art-content") or contains(@class, "art-content") or contains(@id, "endOfArticle")][1]''',
     # (…)[1] = first occurrence
     '(.//article)[1]',
     """(.//*[(self::article or self::div or self::main or self::section)][
@@ -152,7 +152,7 @@ OVERALL_DISCARD_XPATH = [XPath(x) for x in (
     or contains(@class, "yin") or contains(@class, "zlylin") or
     contains(@class, "xg1") or contains(@id, "bmdh") or
     contains(@class, "slide") or contains(@class, "viewport") or
-    @data-lp-replacement-content or @data-testid]''',
+    @data-lp-replacement-content]''',
 
     # comment debris + hidden parts
     '''.//*[@class="comments-title" or contains(@class, "comments-title") or
