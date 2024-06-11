@@ -14,6 +14,7 @@ import pytest
 
 from lxml import etree, html
 
+
 try:
     from cchardet import detect
 except ImportError:
@@ -29,6 +30,7 @@ from trafilatura.main_extractor import (handle_formatting, handle_image,
                                         handle_table, handle_textelem)
 from trafilatura.meta import reset_caches
 from trafilatura.metadata import Document
+from trafilatura.readability_lxml import is_probably_readerable
 from trafilatura.settings import DEFAULT_CONFIG, TAG_CATALOG, use_config
 from trafilatura.utils import (LANGID_FLAG, detect_encoding, is_dubious_html, is_image_file,
                                language_classifier, load_html, normalize_unicode,
@@ -191,6 +193,8 @@ def test_tojson():
     # test json
     mystring = '<html><body><p>ÄÄÄÄÄÄÄÄÄÄÄÄÄÄ</p></body></html>'
     result = extract(mystring, output_format='json', config=ZERO_CONFIG)
+    assert "Ä" in result and result.endswith('}')
+    result = extract(mystring, output_format='json', config=ZERO_CONFIG, with_metadata=True)
     assert result.endswith('}') and '"fingerprint":' in result and '"language":' in result
     assert extract(mystring, output_format='json', include_comments=False, config=ZERO_CONFIG).endswith('}')
 
@@ -297,6 +301,10 @@ def test_formatting():
     assert my_result == '### Title\n**This here is in bold font.**'
     assert extract(my_string, output_format='markdown', config=ZERO_CONFIG) == my_result
     assert '<hi rend="#b">' in etree.tostring(bare_extraction(my_string, output_format='markdown', config=ZERO_CONFIG)["body"], encoding="unicode")
+
+    meta_string = '<html><head><title>Test</title></head><body><p>ABC.</p></body></html>'
+    meta_result = extract(meta_string, output_format='markdown', config=ZERO_CONFIG, with_metadata=True)
+    assert " ".join(meta_result.split()) == "--- title: Test --- ABC."
 
     # space between paragraphs
     my_document = html.fromstring('<html><body><article><h3>Title</h3><p>Paragraph 1</p><p>Paragraph 2</p></article></body></html>')
@@ -523,7 +531,7 @@ def test_links():
     assert '<ref target="testlink.html">link</ref>' in extract(teststring, include_links=True, no_fallback=True, output_format='xml', config=ZERO_CONFIG)
     # test license link
     mydoc = html.fromstring('<html><body><p>Test text under <a rel="license" href="">CC BY-SA license</a>.</p></body></html>')
-    assert 'license="CC BY-SA license"' in extract(mydoc, include_links=True, no_fallback=True, output_format='xml', config=ZERO_CONFIG)
+    assert 'license="CC BY-SA license"' in extract(mydoc, include_links=True, no_fallback=True, output_format='xml', config=ZERO_CONFIG, with_metadata=True)
 
 
 def test_tei():
@@ -796,8 +804,6 @@ def test_extraction_options():
         extract(my_html, json_output=True)
     assert extract(my_html, config=NEW_CONFIG) is None
     assert extract(my_html, config=ZERO_CONFIG) is not None
-    with pytest.raises(ValueError):
-        extract(my_html, with_metadata=True, output_format='xml', config=ZERO_CONFIG)
     assert extract(my_html, only_with_metadata=False, output_format='xml', config=ZERO_CONFIG) is not None
     assert extract(my_html, only_with_metadata=True, output_format='xml', config=ZERO_CONFIG) is None
     assert extract(my_html, target_language='de', config=ZERO_CONFIG) is None
@@ -805,8 +811,9 @@ def test_extraction_options():
     # assert extract(my_html) is None
 
     my_html = '<html><head/><body>' + '<p>ABC def ghi jkl.</p>'*1000 + '<p>Posted on 1st Dec 2019<.</p></body></html>'
-    assert bare_extraction(my_html, config=ZERO_CONFIG)["date"] is not None
-    assert bare_extraction(my_html, config=NEW_CONFIG)["date"] is None
+    assert bare_extraction(my_html, config=ZERO_CONFIG, with_metadata=True)["date"] is not None
+    assert bare_extraction(my_html, config=NEW_CONFIG, with_metadata=True)["date"] is None
+    assert bare_extraction(my_html, config=NEW_CONFIG, with_metadata=False)["date"] is None
 
 
 def test_precision_recall():
@@ -990,7 +997,7 @@ def test_table_processing():
       </row>''' in my_result
     assert extract(htmlstring, no_fallback=True, output_format='txt').startswith("Present Tense | I buy | you buy |")
     # table with links
-    # todo: further tests and adjustsments
+    # todo: further tests and adjustments
     htmlstring = '<html><body><article><table><tr><td><a href="test.html">' + 'ABCD'*100 + '</a></td></tr></table></article></body></html>'
     result = extract(htmlstring, no_fallback=True, output_format='xml', config=ZERO_CONFIG, include_tables=True, include_links=True)
     assert 'ABCD' not in result
@@ -1080,9 +1087,28 @@ def test_table_processing():
     htmlstring = '<html><body><article><table><tr><th>head 1</th><th>head 2</th></tr><tr><td>1</td><td>2</td></tr></table></article></body></html>'
     assert "---|---|" in extract(htmlstring, no_fallback=True, output_format='txt', config=ZERO_CONFIG, include_tables=True)
 
+    # remove new lines in table cells in text format
+    htmlstring = '<html><body><article><table><tr><td>cell<br>1</td><td>cell<p>2</p></td></tr></table></article></body></html>'
+    result = extract(htmlstring, no_fallback=True, output_format='txt', config=ZERO_CONFIG, include_tables=True)
+    assert "cell 1 | cell 2 |" in result
+
+    # only one header row is allowed in text format
+    htmlstring = '<html><body><article><table><tr><th>a</th><th>b</th></tr><tr><th>c</th><th>d</th></tr></table></article></body></html>'
+    result = extract(htmlstring, no_fallback=True, output_format='txt', config=ZERO_CONFIG, include_tables=True)
+    assert result.count("---|") == 2
+
+    # handle colspan by appending columns in text format
+    htmlstring = '<html><body><article><table><tr><td colspan="2">a</td><td>b</td></tr><tr><td>c</td><td>d</td><td>e</td></tr></table></article></body></html>'
+    result = extract(htmlstring, no_fallback=True, output_format='txt', config=ZERO_CONFIG, include_tables=True)
+    assert "a | b | |" in result
+
 
 def test_list_processing():
     options = DEFAULT_OPTIONS
+    # basic lists
+    my_doc = "<html><body><article><p>P 1</p><ul><li>Item 1</li><li>Item 2</li></ul><p>P 2</p></article></body></html>"
+    my_result = extract(my_doc, no_fallback=True, output_format='txt', config=ZERO_CONFIG)
+    assert my_result == "P 1\n- Item 1\n- Item 2\nP 2"
     # malformed lists (common error)
     result = etree.tostring(handle_lists(etree.fromstring('<list>Description of the list:<item>List item 1</item><item>List item 2</item><item>List item 3</item></list>'), options))
     assert result.count(b'List item') == 3
@@ -1292,6 +1318,174 @@ def test_config_loading():
     assert config is not None
 
 
+def test_is_probably_readerable():
+    """
+    Test is_probably_readerable function.
+    """
+    very_small_str = "hello there"
+    small_str = "hello there " * 11
+    large_str = "hello there " * 12
+    very_large_str = "hello there " * 50
+    linebreaks_str = f"{large_str} <br>" * 10
+
+    very_small_doc = load_html(f"<html><p id='main'>{very_small_str}</p></html>")
+    small_doc = load_html(f"<html><p id='main'>{small_str}</p></html>")
+    large_doc = load_html(f"<html><p id='main'>{large_str}</p></html>")
+    very_large_doc = load_html(f"<html><p id='main'>{very_large_str}</p></html>")
+    likely_doc = load_html(
+        f"<html><p id='main' class='header'>{very_large_str}</p><p id='header' class='article'>{very_large_str}</p><p id='footer' class='body'>{very_large_str}</p></html>"
+    )
+    unlikely_doc = load_html(
+        f"<html><p id='header'>{very_large_str}</p><p class='footer'>{very_large_str}</p></html>"
+    )
+    visible_doc = load_html(
+        f"<html><p id='main' style='display: block'>{very_large_str}</p><p id='main'>{very_large_str}</p><p id='main' aria-hidden='false'>{very_large_str}</p></html>"
+    )
+    invisible_doc = load_html(
+        f"<html><p id='main' style='display: none'>{very_large_str}</p><p id='main' hidden>{very_large_str}</p><p id='main' aria-hidden='true'>{very_large_str}</p></html>"
+    )
+    linebreaks_doc = load_html(
+        f"<html><div>{linebreaks_str * 10}</div></html>"
+    )
+    no_linebreaks_doc = load_html(f"<html><div>{large_str * 10}</div></html>")
+
+    # should only declare large documents as readerable when default options
+    assert not is_probably_readerable(very_small_doc)
+    assert not is_probably_readerable(small_doc)
+    assert not is_probably_readerable(large_doc)
+    assert is_probably_readerable(very_large_doc)
+
+    # should declare small and large documents as readerable when lower min_content_length
+    options = {"min_content_length": 120, "min_score": 0}
+    assert not is_probably_readerable(very_small_doc, options)
+    assert is_probably_readerable(small_doc, options)
+    assert is_probably_readerable(large_doc, options)
+    assert is_probably_readerable(very_large_doc, options)
+
+    # should only declare largest document as readerable when higher min_content_length
+    options = {"min_content_length": 200, "min_score": 0}
+    assert not is_probably_readerable(very_small_doc, options)
+    assert not is_probably_readerable(small_doc, options)
+    assert not is_probably_readerable(large_doc, options)
+    assert is_probably_readerable(very_large_doc, options)
+
+    # should declare large documents as readerable when lower min_score
+    options = {"min_content_length": 0, "min_score": 4}
+    assert not is_probably_readerable(very_small_doc, options)
+    assert is_probably_readerable(small_doc, options)
+    assert is_probably_readerable(large_doc, options)
+    assert is_probably_readerable(very_large_doc, options)
+
+    # should declare large documents as readerable when higher min_score
+    options = {"min_content_length": 0, "min_score": 11.5}
+    assert not is_probably_readerable(very_small_doc, options)
+    assert not is_probably_readerable(small_doc, options)
+    assert is_probably_readerable(large_doc, options)
+    assert is_probably_readerable(very_large_doc, options)
+
+    # should check id and class attributes
+    assert is_probably_readerable(likely_doc)
+    assert not is_probably_readerable(unlikely_doc)
+
+    # should check linebreaks in div elements
+    assert is_probably_readerable(linebreaks_doc)
+    assert not is_probably_readerable(no_linebreaks_doc)
+
+    called = False
+
+    def visibility_checker_invisible(node):
+        nonlocal called
+        called = True
+        return False
+
+    # should use node visibility checker provided as option - not visible
+    options = {"visibility_checker": visibility_checker_invisible}
+    assert not is_probably_readerable(very_large_doc, options)
+    assert called
+
+    called = False
+
+    def visibility_checker_visible(node):
+        nonlocal called
+        called = True
+        return True
+
+    # should use node visibility checker provided as option - visible
+    options = {"visibility_checker": visibility_checker_visible}
+    assert is_probably_readerable(very_large_doc, options)
+    assert called
+
+    # should use default node visibility checker 
+    assert is_probably_readerable(visible_doc)
+    assert not is_probably_readerable(invisible_doc)
+
+    # https://github.com/mozilla/readability/blob/main/test/test-pages/mozilla-2/source.html#L22
+    with open(
+        path.join(RESOURCES_DIR, "mozilla.org.firefox.developer.html"),
+        "r",
+        encoding="utf-8",
+    ) as f:
+        teststring = f.read()
+
+    doc = load_html(teststring)
+    assert not is_probably_readerable(doc)
+
+
+def test_html_conversion():
+    "Test conversion from internal XML to HTML output."
+    xml = '''<xml>
+    <list>
+        <item>Item 1</item>
+        <item>Item 2</item>
+    </list>
+    <p>Text</p>
+    <head rend="h1">Heading 1</head>
+    <head rend="h2">Heading 2</head>
+    <hi rend="#i">Italic</hi>
+    <hi rend="#b">Bold</hi>
+    <ref target="https://example.com">Link</ref>
+</xml>'''
+    tree = etree.fromstring(xml)
+    html_tree = trafilatura.htmlprocessing.convert_to_html(copy(tree))
+    expected_html = '''<html><body>
+    <ul>
+        <li>Item 1</li>
+        <li>Item 2</li>
+    </ul>
+    <p>Text</p>
+    <h1>Heading 1</h1>
+    <h2>Heading 2</h2>
+    <i>Italic</i>
+    <strong>Bold</strong>
+    <a href="https://example.com">Link</a>
+</body></html>'''
+    assert etree.tostring(html_tree, method='html').decode() == expected_html
+
+    html = "<html><body><article><h1>Title</h1><p>Text.</p></article></body></html>"
+    excepted_html = """<html>
+  <body>
+    <h1>Title</h1>
+    <p>Text.</p>
+  </body>
+</html>"""
+    result = extract(html, output_format="html", config=ZERO_CONFIG)
+    assert result == excepted_html
+
+    html = "<html><body><article><h1>Title 1</h1><p>Text.</p></article></body></html>"
+    excepted_html = """<html>
+  <head>
+    <meta name="title" content="Title 1"/>
+    <meta name="fingerprint" content="f6fd180b8fbe3670"/>
+  </head>
+  <body>
+    <h1>Title 1</h1>
+    <p>Text.</p>
+  </body>
+</html>"""
+    result = extract(html, output_format="html", config=ZERO_CONFIG, with_metadata=True)
+    assert result == excepted_html
+
+
 if __name__ == '__main__':
     test_config_loading()
     test_trim()
@@ -1316,3 +1510,5 @@ if __name__ == '__main__':
     test_nonstd_html_entities()
     test_large_doc_performance()
     test_lang_detection()
+    test_is_probably_readerable()
+    test_html_conversion()

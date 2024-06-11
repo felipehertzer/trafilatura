@@ -162,10 +162,13 @@ def add_args(parser):
     # https://docs.python.org/3/library/argparse.html#argparse.ArgumentParser.add_mutually_exclusive_group
     group5_ex.add_argument('-out', '--output-format',
                         help="determine output format",
-                        choices=['txt', 'csv', 'json', 'markdown', 'xml', 'xmltei'],
+                        choices=['txt', 'csv', 'html', 'json', 'markdown', 'xml', 'xmltei'],
                         default='txt')
     group5_ex.add_argument("--csv",
                         help="shorthand for CSV output",
+                        action="store_true")
+    group5_ex.add_argument("--html",
+                        help="shorthand for HTML output",
                         action="store_true")
     group5_ex.add_argument("--json",
                         help="shorthand for JSON output",
@@ -207,16 +210,10 @@ def parse_args(args):
 def map_args(args):
     '''Map existing options to format and output choices.'''
     # formats
-    if args.csv:
-        args.output_format = 'csv'
-    elif args.json:
-        args.output_format = 'json'
-    elif args.markdown:
-        args.output_format = 'markdown'
-    elif args.xml:
-        args.output_format = 'xml'
-    elif args.xmltei:
-        args.output_format = 'xmltei'
+    for otype in ("csv", "html", "json", "markdown", "xml", "xmltei"):
+        if getattr(args, otype):
+            args.output_format = otype
+            break
     # output configuration
     if args.nocomments is False:
         raise ValueError(
@@ -225,10 +222,6 @@ def map_args(args):
     if args.notables is False:
         raise ValueError(
               "--notables is deprecated, use --no-tables instead",
-              )
-    if args.with_metadata is True:
-        raise ValueError(
-              "--with-metadata is deprecated, use --only-with-metadata instead",
               )
     if args.inputfile:
         raise ValueError(
@@ -296,13 +289,7 @@ def process_args(args):
 
     # read input on STDIN directly
     else:
-        # file type and unicode check
-        try:
-            htmlstring = sys.stdin.read()
-        except UnicodeDecodeError:
-            sys.exit('ERROR: system, file type or buffer encoding')
-        # process
-        result = examine(htmlstring, args, url=args.URL)
+        result = examine(sys.stdin.buffer.read(), args, url=args.URL)
         write_result(result, args)
 
     # change exit code if there are errors
