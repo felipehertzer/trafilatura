@@ -254,7 +254,7 @@ def test_author_from_meta(doc, expected):
         ),
         (
             f'{BODY_BEGIN}<div><strong><a class="d1dba0c3091a3c30ebd6" data-testid="AuthorURL" href="/by/p535y1">AUTHOR NAME</a></strong></div>{BODY_END}',
-            "AUTHOR NAME",
+            "Author Name",
         ),
     ],
 )
