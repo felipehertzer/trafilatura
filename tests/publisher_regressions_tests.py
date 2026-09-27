@@ -54,16 +54,16 @@ def test_story_by_prefix_is_removed():
     assert normalize_authors(None, "Analysis by Jane Doe") == "Jane Doe"
 
 
-def test_jsonld_person_replaces_meta_photo_credit():
-    head = '<meta name="author" content="Jane Doe | Photography by John Roe for WSJ">'
-    head += ld(
-        {
-            "@context": "https://schema.org",
-            "@type": "NewsArticle",
-            "author": [{"@type": "Person", "name": "Jane Doe"}],
-        }
-    )
-    assert extract_metadata(page(head)).author == "Jane Doe"
+def test_visual_credits_are_not_authors():
+    assert normalize_authors(None, "Jane Doe | Photography by John Roe for WSJ") == "Jane Doe"
+    assert normalize_authors(None, "Jane Doe and Illustrations by John Roe") == "Jane Doe"
+    assert normalize_authors(None, "Photos by John Roe") is None
+
+
+def test_meta_coauthors_are_kept_beside_jsonld_person():
+    head = '<meta name="author" content="Thomas Grove and Daria Matviichuk">'
+    head += ld({"@context": "https://schema.org", "@type": "NewsArticle", "author": [{"@type": "Person", "name": "Thomas Grove"}]})
+    assert extract_metadata(page(head)).author == "Thomas Grove; Daria Matviichuk"
 
 
 def test_meta_author_kept_without_jsonld_person():

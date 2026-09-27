@@ -530,15 +530,11 @@ def extract_metadata(
     if metadata.author and " " not in metadata.author:
         metadata.author = None
 
-    # fix: try json-ld metadata and override; article Person authors replace
-    # free-text meta bylines, which can also credit photographers or desks
-    meta_author, metadata.author = metadata.author, None
+    # fix: try json-ld metadata and override
     try:
         metadata = extract_meta_json(tree, metadata, include_organization_authors=False)
     except Exception as err:  # bugs in json_metadata.py
         LOGGER.warning("error in JSON metadata extraction: %s", err)
-    if not metadata.author:
-        metadata.author = meta_author
 
     # title
     if not metadata.title:
