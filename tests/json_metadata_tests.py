@@ -1531,7 +1531,8 @@ def test_normalize_authors_datelines(byline, expected):
     [
         ("Article written by Surname Name", "Surname Name"),
         ("Reviewed by Surname Name", "Surname Name"),
-        ("Photos by Surname Name", "Surname Name"),
+        # the fork keeps a picture credit out of the byline: the photographer did not write the story
+        ("Photos by Surname Name", None),
         ("This article was written by Jane Doe", "Jane Doe"),
         ("View all posts by Jane Doe", "Jane Doe"),
         ("WRITTEN BY Jane Doe", "Jane Doe"),
@@ -1542,7 +1543,7 @@ def test_normalize_authors_datelines(byline, expected):
         ("Por Jane Doe", "Jane Doe"),
         ("par Jean Dupont", "Jean Dupont"),
         ("Door Jan Jansen", "Jan Jansen"),
-        ("Jane Doe and Photos by John Roe", "Jane Doe; John Roe"),
+        ("Jane Doe and Photos by John Roe", "Jane Doe"),
         ("By", None),
     ],
 )
