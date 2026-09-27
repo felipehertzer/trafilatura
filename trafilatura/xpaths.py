@@ -461,7 +461,7 @@ def _author_discard(tree: HtmlElement) -> list[HtmlElement]:
 
 
 AUTHOR_XPATHS: list[Callable[[HtmlElement], list[HtmlElement]]] = [_author_specific, _author_generic, _author_any]
-AUTHOR_DISCARD_XPATHS: list[Callable[[HtmlElement], Any]] = [_author_discard, XPath("//time|//figure")]
+AUTHOR_DISCARD_XPATHS: list[Callable[[HtmlElement], Any]] = [_author_discard, XPath("//time|//figure|//script|//style")]
 
 
 # links under a block: /descendant::a walks each block once, whereas //a expands to
