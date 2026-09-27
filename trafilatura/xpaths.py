@@ -374,6 +374,7 @@ AUTHOR_XPATHS = [
         """
         //*[self::a or self::address or self::div or self::link or self::p or self::span or self::strong][
         @rel='author' or @id='author' or @class='author' or @itemprop='author name' or rel='me' or
+        (self::a and contains(concat(' ', normalize-space(@class), ' '), ' author-link ')) or
         @data-testid='AuthorCard' or @data-testid='AuthorURL' or
         re:test(@class, 'author-?name|AuthorName|authorName')]|//author
         """,
