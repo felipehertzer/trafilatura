@@ -4,6 +4,7 @@ Functions to process nodes in HTML code.
 """
 
 import logging
+import re
 from copy import deepcopy
 
 from lxml.etree import Element, SubElement, XPath, _Element, strip_tags, tostring
@@ -181,6 +182,14 @@ def is_paragraph_listing(links_xpath: list[HtmlElement]) -> bool:
     return True
 
 
+SENTENCE_END = re.compile(r"[.!?][\"'’”)]?$")
+
+
+def is_linked_sentence(element: HtmlElement, text: str) -> bool:
+    "A paragraph that is a complete sentence is prose even when a link spans it."
+    return element.tag == "p" and len(text.split()) >= 12 and SENTENCE_END.search(text) is not None
+
+
 def link_density_test(element: HtmlElement, text: str, favor_precision: bool = False) -> tuple[bool, list[str]]:
     "Remove sections which are rich in links (probably boilerplate)"
     links_xpath = element.findall(".//ref")
@@ -191,7 +200,7 @@ def link_density_test(element: HtmlElement, text: str, favor_precision: bool = F
         return False, []
     mylist: list[str] = []
     # shortcut
-    if len(links_xpath) == 1:
+    if len(links_xpath) == 1 and not is_linked_sentence(element, text):
         len_threshold = 10 if favor_precision else 100
         link_text = trim(links_xpath[0].text_content())
         if len(link_text) > len_threshold and len(link_text) > len(text) * 0.9:

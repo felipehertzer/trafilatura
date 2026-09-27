@@ -45,6 +45,22 @@ def try_readability(htmlinput: HtmlElement) -> HtmlElement:
         return HtmlElement()
 
 
+def _wraps_own_extraction(body: _Element, algo_text: str, len_text: int, options: Extractor) -> bool:
+    """Own extraction is substantial and wholly contained in readability's output.
+
+    Readability then only adds page chrome around the same article (header,
+    captions, datelines), so its greater length is not missing content.
+    """
+    if len_text < 4 * options.min_extracted_size:
+        return False
+    paragraphs = [" ".join("".join(p.itertext()).split()) for p in body.iter("p")]
+    paragraphs = [p for p in paragraphs if len(p) >= 40]
+    if len(paragraphs) < 3:
+        return False
+    algo_normalized = " ".join(algo_text.split())
+    return all(p in algo_normalized for p in paragraphs)
+
+
 def _prefer_readability(
     body: _Element,
     algo_body: HtmlElement,
@@ -63,8 +79,13 @@ def _prefer_readability(
     return (
         # own text empty
         len_text == 0
-        # readability much longer, unless it grabbed raw JSON (#632)
-        or (len_algo > 2 * len_text and not algo_text.startswith("{"))
+        # readability much longer, unless it grabbed raw JSON (#632) or only
+        # wraps a substantial own extraction in page chrome
+        or (
+            len_algo > 2 * len_text
+            and not algo_text.startswith("{")
+            and not _wraps_own_extraction(body, algo_text, len_text, options)
+        )
         # own extraction structurally deficient: no paragraph text or table-dominated
         or (
             len_algo > options.min_extracted_size * 2

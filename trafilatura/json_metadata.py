@@ -83,7 +83,10 @@ JSON_NAME = re.compile(r'"@type":"[Aa]rticle", ?"name": ?"([^"\\]+)', re.DOTALL)
 JSON_HEADLINE = re.compile(r'"headline": ?"([^"\\]+)', re.DOTALL)
 JSON_SEQ = [('"name"', JSON_NAME), ('"headline"', JSON_HEADLINE)]
 
-AUTHOR_PREFIX = re.compile(r"^([a-zäöüß]+(ed|t))? ?(written by|words by|words|by|von|from) ", flags=re.IGNORECASE)
+AUTHOR_PREFIX = re.compile(
+    r"^([a-zäöüß]+(ed|t)|story|report|reporting|text|article|analysis)? ?(written by|words by|words|by|von|from) ",
+    flags=re.IGNORECASE,
+)
 AUTHOR_REMOVE_NUMBERS = re.compile(r"\d.+?$")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
 AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
@@ -197,13 +200,29 @@ def process_parent(parent: Any, metadata: Document, *, include_organization_auth
                 else:
                     metadata.categories = list(filter(None, content["articleSection"]))
 
-            # try to extract title
-            if not metadata.title:
-                if "name" in content and content_type == "article":
-                    metadata.title = content["name"]
-                elif "headline" in content:
-                    metadata.title = content["headline"]
+            # try to extract title; the article headline also replaces a meta
+            # title that is that headline followed by site or section branding
+            if "name" in content and content_type == "article":
+                headline = content["name"]
+            else:
+                headline = content.get("headline")
+            if isinstance(headline, str) and headline.strip() and (
+                not metadata.title or is_branded_headline(metadata.title, headline)
+            ):
+                metadata.title = headline
     return metadata
+
+
+TITLE_SUFFIX_SEPARATORS = frozenset("|-–—·•:")
+
+
+def is_branded_headline(title: str, headline: str) -> bool:
+    """True when a meta title is the article headline plus a separated suffix."""
+    title = " ".join(unescape(title).split())
+    headline = " ".join(unescape(headline).split())
+    if not headline or title == headline or not title.startswith(headline):
+        return False
+    return title[len(headline) :].lstrip()[:1] in TITLE_SUFFIX_SEPARATORS
 
 
 def extract_json_image(value: Any, references: dict[str, Any]) -> str | None:

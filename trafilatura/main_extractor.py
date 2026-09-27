@@ -752,6 +752,35 @@ def prune_unwanted_sections(
     return tree
 
 
+SPLIT_BODY_CLASS = re.compile(r"^(?:article(?:-|__)?body|articleBody|article__content|(?:entry|article)-content)$")
+
+
+def merge_split_body(subtree: HtmlElement) -> HtmlElement:
+    """Append later containers that continue the same article body.
+
+    Some CMSes split one article across containers sharing the body class
+    (``article__body`` then ``article__body article__body--bottom``); the
+    first-match BODY_XPATH would otherwise keep only the opening part.
+    """
+    tokens = {token for token in (subtree.get("class") or "").split() if SPLIT_BODY_CLASS.match(token)}
+    if not tokens:
+        return subtree
+    scope = next((node for node in subtree.iterancestors() if node.tag in ("article", "main")), None)
+    if scope is None:
+        return subtree
+    after = False
+    for other in list(scope.iter(str(subtree.tag))):
+        if other is subtree:
+            after = True
+            continue
+        if not after or subtree in other.iterancestors():
+            continue
+        if tokens & set((other.get("class") or "").split()):
+            for child in list(other):
+                subtree.append(child)
+    return subtree
+
+
 def _extract(tree: HtmlElement, options: Extractor) -> tuple[_Element, str, set[str]]:
     # init
     potential_tags = set(TAG_CATALOG)
@@ -768,6 +797,7 @@ def _extract(tree: HtmlElement, options: Extractor) -> tuple[_Element, str, set[
         subtree = next((s for s in expr(tree) if s is not None), None)
         if subtree is None:
             continue
+        subtree = merge_split_body(subtree)
         # prune the subtree
         subtree = prune_unwanted_sections(subtree, potential_tags, options)
         # skip if empty tree

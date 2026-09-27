@@ -929,7 +929,7 @@ def test_pages():
     )
 
     metadata = extract_metadata(load_mock_page_meta("https://creativecommons.org/about/"))
-    assert metadata.title == "What we do - Creative Commons"
+    assert metadata.title == "What we do"
     assert (
         metadata.description
         == 'What is Creative Commons? Creative Commons helps you legally share your knowledge and creativity to build a more equitable, accessible, and innovative world. We unlock the full potential of the internet to drive a new era of development, growth and productivity. With a network of staff, board, and affiliates around the world, Creative Commons provides … Read More "What we do"'
@@ -1041,7 +1041,7 @@ def test_pages():
 
     url = "https://stackoverflow.blog/2020/01/20/what-is-rust-and-why-is-it-so-popular/"
     metadata = extract_metadata(load_mock_page_meta(url))
-    assert metadata.title == "What is Rust and why is it so popular? - Stack Overflow Blog"
+    assert metadata.title == 'What is Rust and why is it so popular?'
     assert metadata.author == "Jake Goulding"
     assert metadata.sitename == "Stack Overflow Blog"
     assert metadata.categories == ["Bulletin"]

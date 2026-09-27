@@ -154,7 +154,7 @@ REMOVE_COMMENTS_XPATH = [
         """
         .//*[self::div or self::list or self::section or self::details][
         re:test(@id, '^(?:[Cc]omment|comol|disqus_thread|dsq-comments)') or
-        re:test(@class, '^[Cc]omment|(?:article|post)-comments')]
+        re:test(@class, '^[Cc]omment|(?:^|\\s)(?!(?:has|no|with|show|open|closed)-)[\\w]+-comments(?:\\s|$)')]
         """,
         namespaces={"re": REGEXP_NS},
     )
@@ -410,6 +410,7 @@ AUTHOR_DISCARD_XPATHS = [
         .//*[self::a or self::div or self::section or self::span][
         @id='comments' or @class='comments' or @class='title' or @class='date' or
         re:test(@id, '^comments|comment-?list|ProductReviews') or
+        re:test(@class, '(?:^|\\s)(?!(?:has|no|with|show|open|closed)-)[\\w]+-comments(?:\\s|$)') or
         re:test(@class, '^[Cc]omments|commentlist|comments-list|sidebar|is-hidden|quote|embedly-instagram|article-(?:share|support)|print|category|meta-date|meta-reviewer|meta-status') or
         contains(@data-component, 'Figure')]
         """,

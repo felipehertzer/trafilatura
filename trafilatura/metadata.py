@@ -318,6 +318,53 @@ def examine_title_element(
     return title, None, None
 
 
+TITLE_SITE_SUFFIX = re.compile(r"^(.{10,}?)\s+[|–—•·-]\s+([^|–—•·]{3,40})$")
+
+
+def _site_key(value: str) -> str:
+    value = re.sub(r"^the\s+", "", value.strip(), flags=re.IGNORECASE)
+    return re.sub(r"[^0-9a-z]+", "", value.casefold())
+
+
+TITLE_SUFFIX_SEPARATOR = re.compile(r"^\s*[|–—•·~-]\s+")
+
+
+def strip_site_suffix(
+    title: str, sitename: str | None, hostname: str | None, tree: HtmlElement | None = None
+) -> str:
+    """Remove trailing branding that the page proves is not part of the headline.
+
+    The article's own headline (h1 or itemprop=headline) followed by a separator
+    marks everything after it as branding. Otherwise only a last segment naming
+    the site is removed: "Headline | CNN Politics" -> "Headline" for site "CNN",
+    "Headline - 9to5Mac" for host "9to5mac.com".
+    """
+    normalized = " ".join(unescape(title).replace("\u00a0", " ").split())
+    if tree is not None:
+        headlines = [block_text(h1) for h1 in tree.xpath(".//h1")]
+        headlines += tree.xpath('.//*[@itemprop="headline"]/@content')
+        for headline in headlines:
+            headline = " ".join((headline or "").replace("\u00a0", " ").split())
+            if (
+                len(headline) >= 10
+                and normalized.startswith(headline)
+                and TITLE_SUFFIX_SEPARATOR.match(normalized[len(headline) :])
+            ):
+                return headline
+    match = TITLE_SITE_SUFFIX.match(title.strip())
+    if not match:
+        return title
+    suffix = _site_key(match[2])
+    owners = [_site_key(sitename or "")]
+    if hostname:
+        owners.append(_site_key(hostname.removeprefix("www.").split(".", 1)[0]))
+        owners.append(_site_key(hostname.removeprefix("www.")))
+    for owner in filter(None, owners):
+        if len(owner) >= 3 and suffix.startswith(owner):
+            return match[1].strip()
+    return title
+
+
 def extract_title(tree: HtmlElement) -> str | None:
     """Extract the document title"""
     # only one h1-element: take it
@@ -483,11 +530,15 @@ def extract_metadata(
     if metadata.author and " " not in metadata.author:
         metadata.author = None
 
-    # fix: try json-ld metadata and override
+    # fix: try json-ld metadata and override; article Person authors replace
+    # free-text meta bylines, which can also credit photographers or desks
+    meta_author, metadata.author = metadata.author, None
     try:
         metadata = extract_meta_json(tree, metadata, include_organization_authors=False)
     except Exception as err:  # bugs in json_metadata.py
         LOGGER.warning("error in JSON metadata extraction: %s", err)
+    if not metadata.author:
+        metadata.author = meta_author
 
     # title
     if not metadata.title:
@@ -536,6 +587,10 @@ def extract_metadata(
         mymatch = META_URL.match(metadata.url)
         if mymatch:
             metadata.sitename = mymatch[1]
+
+    # drop a trailing branding segment copied from og:title or <title>
+    if metadata.title:
+        metadata.title = strip_site_suffix(metadata.title, metadata.sitename, metadata.hostname, tree)
 
     # categories
     if not metadata.categories:
