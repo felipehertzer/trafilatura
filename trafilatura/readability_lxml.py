@@ -116,7 +116,9 @@ class Document:
         Warning: It mutates internal DOM representation of the HTML document,
         so it is better to call other API methods before this one.
         """
-        for elem in list(self.doc.iter("script", "style", "fencedframe")):
+        # form controls (country pickers in newsletter forms) are not prose but
+        # their option text would otherwise outscore the article
+        for elem in list(self.doc.iter("script", "style", "fencedframe", "select")):
             elem.drop_tree()
 
         # no retry: it would rerun on the same mutated tree
