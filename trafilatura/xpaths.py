@@ -427,7 +427,7 @@ AUTHOR_DISCARD_XPATHS = [
         """,
         namespaces={"re": REGEXP_NS},
     ),
-    XPath("//time|//figure"),
+    XPath("//time|//figure|//script|//style"),
 ]
 
 
