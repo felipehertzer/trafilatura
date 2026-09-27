@@ -117,3 +117,18 @@ def test_split_article_body_is_merged():
 def test_template_content_is_not_text():
     body = "<article><template><p>[category] [title]</p></template><p>" + PARAGRAPH * 3 + "</p></article>"
     assert "[category]" not in bare_extraction(page("", body)).text
+
+
+def test_malformed_jsonld_nodes_do_not_discard_metadata():
+    article = {"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Storm hits coast",
+               "articleSection": None, "author": {"@type": "Person", "name": "Jane Doe"}}
+    head = ld(article) + ld([[{"@type": "WebPage"}], None, "text"])
+    metadata = extract_metadata(page(head))
+    assert metadata.title == "Storm hits coast"
+    assert metadata.author == "Jane Doe"
+
+
+def test_article_sections_accept_only_strings():
+    article = {"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Storm hits coast",
+               "articleSection": ["Weather", None, 3]}
+    assert extract_metadata(page(ld(article))).categories == ["Weather"]
