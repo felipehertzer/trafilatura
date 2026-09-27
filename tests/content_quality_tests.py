@@ -10,6 +10,18 @@ URL = "https://example.org/story"
 IMAGE = "https://example.org/article.jpg"
 
 
+@pytest.mark.parametrize("author", ["Jane Smith", "Daily Cargo News"])
+def test_author_profile_link_excludes_surrounding_social_navigation(author):
+    page = (
+        '<html><body><div class="hs-author-avatar"><span>Posted by </span>'
+        f'<a class="profile author-link" href="/authors/profile"><strong>{author}</strong></a>'
+        '<p><a class="hs-author-social-link" href="">LinkedIn</a> | '
+        '<a href="">Website</a></p></div></body></html>'
+    )
+    assert extract_metadata(page).author == author
+    assert extract_metadata(page, author_blacklist={author}).author is None
+
+
 @pytest.mark.parametrize(
     "value", [IMAGE, {"@type": "ImageObject", "url": IMAGE}, {"contentUrl": IMAGE}, [None, {"url": IMAGE}]]
 )
