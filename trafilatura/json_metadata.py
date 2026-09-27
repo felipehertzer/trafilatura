@@ -9,6 +9,7 @@ import re
 from html import unescape
 from re import Pattern
 from typing import Any
+from urllib.parse import urljoin
 
 from .settings import Document
 from .utils import HTML_STRIP_TAGS, as_list, trim
@@ -115,7 +116,7 @@ def is_plausible_sitename(metadata: Document, candidate: Any, content_type: str 
     return False
 
 
-def process_parent(parent: Any, metadata: Document) -> Document:
+def process_parent(parent: Any, metadata: Document, *, include_organization_authors: bool = True) -> Document:
     "Find and extract selected metadata from JSON parts."
     content: dict[str, Any]
     for content in filter(None, parent):
@@ -166,7 +167,15 @@ def process_parent(parent: Any, metadata: Document) -> Document:
                 for author in as_list(list_authors):
                     if isinstance(author, str):
                         author = {"name": author}
-                    if "@type" not in author or "Person" in as_list(author["@type"]):
+                    if not isinstance(author, dict):
+                        continue
+                    author_types = {
+                        value.rsplit("/", 1)[-1].casefold()
+                        for value in as_list(author.get("@type", []))
+                        if isinstance(value, str)
+                    }
+                    allowed_types = {"person", "organization"} if include_organization_authors else {"person"}
+                    if "@type" not in author or author_types & allowed_types:
                         author_name = None
                         # error thrown: author['name'] can be a list (?)
                         if "name" in author:
@@ -197,7 +206,22 @@ def process_parent(parent: Any, metadata: Document) -> Document:
     return metadata
 
 
-def extract_json(schema: list[Any] | dict[str, str], metadata: Document) -> Document:
+def extract_json_image(value: Any, references: dict[str, Any]) -> str | None:
+    """Read an article image without inferring one from publisher logos."""
+    for item in as_list(value):
+        if isinstance(item, dict):
+            reference = item.get("@id")
+            if not item.get("url") and not item.get("contentUrl") and isinstance(reference, str):
+                item = references.get(reference, item)
+            item = item.get("url") or item.get("contentUrl")
+        if isinstance(item, str) and item.strip():
+            return item.strip()
+    return None
+
+
+def extract_json(
+    schema: list[Any] | dict[str, str], metadata: Document, *, include_organization_authors: bool = True
+) -> Document:
     """Parse and extract metadata from JSON-LD data.
 
     Note: baseline.py's `_walk_json` also walks JSON-LD, for page content rather than
@@ -225,7 +249,24 @@ def extract_json(schema: list[Any] | dict[str, str], metadata: Document) -> Docu
             else:
                 parents.append(parent)
 
-    return process_parent(parents, metadata)
+    if not metadata.image:
+        references = {node["@id"]: node for node in parents if isinstance(node, dict) and isinstance(node.get("@id"), str)}
+        for node in parents:
+            if not isinstance(node, dict):
+                continue
+            kinds = {kind.rsplit("/", 1)[-1].casefold() for kind in as_list(node.get("@type", [])) if isinstance(kind, str)}
+            if kinds & JSON_ARTICLE_SCHEMA:
+                identity = node.get("url") or node.get("mainEntityOfPage") or node.get("@id")
+                if isinstance(identity, dict):
+                    identity = identity.get("@id") or identity.get("url")
+                if metadata.url and isinstance(identity, str):
+                    article_url = urljoin(metadata.url, identity).split("#", 1)[0].rstrip("/")
+                    if article_url != metadata.url.split("#", 1)[0].rstrip("/"):
+                        continue
+                metadata.image = extract_json_image(node.get("image"), references)
+                if metadata.image:
+                    break
+    return process_parent(parents, metadata, include_organization_authors=include_organization_authors)
 
 
 def extract_json_author(elemtext: str, regular_expression: Pattern[str]) -> str | None:

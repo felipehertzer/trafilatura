@@ -1168,8 +1168,8 @@ def test_json_metadata_robustness():
         ({"@type": ["Person"], "name": "Jane Doe"}, "Jane Doe"),
         ({"@type": ["Thing", "Person"], "name": "Jane Doe"}, "Jane Doe"),
         ({"@type": ["Person", "Thing"], "name": "Jane Doe"}, "Jane Doe"),
-        ({"@type": "Organization", "name": "Example News"}, None),
-        ({"@type": ["Organization"], "name": "Example News"}, None),
+        ({"@type": "Organization", "name": "Example News"}, "Example News"),
+        ({"@type": ["Organization"], "name": "Example News"}, "Example News"),
         ({"@type": [], "name": "Jane Doe"}, None),
         ({"@type": None, "name": "Jane Doe"}, None),
     ],
@@ -1261,7 +1261,7 @@ def test_extract_json_processes_list_once():
         {"@context": "https://schema.org", "@type": "NewsArticle", "headline": "B"},
     ]
     orig, count = jm.process_parent, []
-    jm.process_parent = lambda p, m: count.append(1) or orig(p, m)
+    jm.process_parent = lambda p, m, **kwargs: count.append(1) or orig(p, m, **kwargs)
     try:
         extract_json(schema, Document())
     finally:
