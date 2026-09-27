@@ -361,6 +361,31 @@ def examine_title_element(
     return title, None, None
 
 
+TITLE_SUFFIX_SEPARATOR = re.compile(r"^\s*[|–—•·~-]\s+")
+
+
+def strip_title_branding(title: str, tree: HtmlElement) -> str:
+    """Remove trailing branding that the page proves is not part of the headline.
+
+    The article's own headline (h1 or itemprop=headline) followed by a separator
+    marks everything after it as branding: "Mayor opens new library | The Express |
+    Regional news" under <h1>Mayor opens new library</h1>. A last segment naming
+    the site is left to strip_site_suffix().
+    """
+    normalized = " ".join(unescape(title).replace("\u00a0", " ").split())
+    headlines = [block_text(h1) for h1 in tree.xpath(".//h1")]
+    headlines += tree.xpath('.//*[@itemprop="headline"]/@content')
+    for headline in headlines:
+        headline = " ".join((headline or "").replace("\u00a0", " ").split())
+        if (
+            len(headline) >= 10
+            and normalized.startswith(headline)
+            and TITLE_SUFFIX_SEPARATOR.match(normalized[len(headline) :])
+        ):
+            return headline
+    return title
+
+
 def extract_title(tree: HtmlElement) -> str | None:
     """Extract the document title"""
     # only one h1-element: take it
@@ -523,13 +548,17 @@ def extract_metadata(
     if metadata.author and " " not in metadata.author:
         metadata.author = None
 
-    # fix: try json-ld metadata and override
+    # fix: try json-ld metadata and override; article Person authors replace
+    # free-text meta bylines, which can also credit photographers or desks
+    meta_author, metadata.author = metadata.author, None
     try:
         metadata = extract_meta_json(tree, metadata, backup_sitename, include_organization_authors=False)
     except Exception as err:  # bugs in json_metadata.py
         LOGGER.warning("error in JSON metadata extraction: %s", err)
     # Twitter and app names rank below meta tags and JSON-LD, above a WebPage name
     metadata.sitename = metadata.sitename or backup_sitename
+    if not metadata.author:
+        metadata.author = meta_author
 
     # title
     if not metadata.title:
@@ -580,6 +609,10 @@ def extract_metadata(
         mymatch = META_URL.match(metadata.url)
         if mymatch:
             metadata.sitename = mymatch[1]
+
+    # drop a trailing branding segment copied from og:title or <title>
+    if isinstance(metadata.title, str):
+        metadata.title = strip_title_branding(metadata.title, tree)
 
     # categories
     if not metadata.categories:
