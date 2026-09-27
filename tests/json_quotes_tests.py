@@ -43,3 +43,33 @@ def test_duplicate_apostrophe_spellings_keep_first_display_name():
     assert normalize_authors(None, "James O’Doherty; James O'Doherty") == "James O’Doherty"
     assert normalize_authors("James O'Doherty", "James O’Doherty") == "James O'Doherty"
     assert normalize_authors(None, "James O’Doherty; Jane O’Doherty") == "James O’Doherty; Jane O’Doherty"
+
+
+@pytest.mark.parametrize(
+    "kind", ["Organization", "organization", "https://schema.org/Organization", ["Thing", "Organization"]]
+)
+def test_explicit_organization_author(kind):
+    content = script(
+        {
+            "@context": "https://schema.org",
+            "@type": "NewsArticle",
+            "author": {"@type": kind, "name": "Fresh Recipes"},
+            "publisher": {"@type": "Organization", "name": "The Publisher"},
+        }
+    )
+    assert metadata(content).author == "Fresh Recipes"
+
+
+def test_publisher_is_not_inferred_as_author_and_malformed_authors_are_skipped():
+    content = script(
+        {
+            "@context": "https://schema.org",
+            "@type": "NewsArticle",
+            "author": [None, 42, {"@type": "ImageObject", "name": "Photo"}, {"@type": "Person", "name": "Jane Smith"}],
+            "publisher": {"@type": "Organization", "name": "The Publisher"},
+        }
+    )
+    assert metadata(content).author == "Jane Smith"
+    assert (
+        metadata(script({"@context": "https://schema.org", "@type": "Organization", "name": "The Publisher"})).author is None
+    )
