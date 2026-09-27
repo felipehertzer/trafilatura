@@ -1300,8 +1300,8 @@ def test_json_metadata_error_fallback(monkeypatch, caplog):
         ({"@type": ["Thing", "Person"], "name": "Jane Doe"}, "Jane Doe"),
         ({"@type": ["Person", "Thing"], "name": "Jane Doe"}, "Jane Doe"),
         ({"@type": "person", "name": "Jane Doe"}, "Jane Doe"),
-        ({"@type": "Organization", "name": "Example News"}, None),
-        ({"@type": ["Organization"], "name": "Example News"}, None),
+        ({"@type": "Organization", "name": "Example News"}, "Example News"),
+        ({"@type": ["Organization"], "name": "Example News"}, "Example News"),
         ({"@type": [], "name": "Jane Doe"}, None),
         ({"@type": None, "name": "Jane Doe"}, None),
     ],
@@ -1389,7 +1389,9 @@ def test_extract_json_processes_list_once(monkeypatch):
         {"@context": "https://schema.org", "@type": "NewsArticle", "headline": "B"},
     ]
     count = []
-    monkeypatch.setattr(json_metadata, "process_parent", lambda *args: count.append(1) or process_parent(*args))
+    monkeypatch.setattr(
+        json_metadata, "process_parent", lambda *args, **kwargs: count.append(1) or process_parent(*args, **kwargs)
+    )
     extract_json(schema, Document())
     assert len(count) == 1
 

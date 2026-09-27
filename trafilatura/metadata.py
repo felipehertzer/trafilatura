@@ -181,7 +181,13 @@ def check_authors(authors: str, author_blacklist: set[str]) -> str | None:
     return None
 
 
-def extract_meta_json(tree: HtmlElement, metadata: Document, backup_sitename: str | None = None) -> Document:
+def extract_meta_json(
+    tree: HtmlElement,
+    metadata: Document,
+    backup_sitename: str | None = None,
+    *,
+    include_organization_authors: bool = True,
+) -> Document:
     """Parse and extract metadata from JSON-LD data"""
     for elem in tree.xpath('.//script[@type="application/ld+json" or @type="application/settings+json"]'):
         if not elem.text:
@@ -201,7 +207,7 @@ def extract_meta_json(tree: HtmlElement, metadata: Document, backup_sitename: st
             except json.JSONDecodeError:
                 metadata = extract_json_parse_error(element_text, metadata)
                 continue
-        metadata = extract_json(schema, metadata, backup_sitename)
+        metadata = extract_json(schema, metadata, backup_sitename, include_organization_authors=include_organization_authors)
     return metadata
 
 
@@ -510,6 +516,8 @@ def extract_metadata(
 
     # initialize dict and try to strip meta tags
     metadata, backup_sitename = examine_meta(tree)
+    if not metadata.url:
+        metadata.url = extract_url(tree, default_url)
 
     # to check: remove it and replace with author_blacklist in test case
     if metadata.author and " " not in metadata.author:
@@ -517,7 +525,7 @@ def extract_metadata(
 
     # fix: try json-ld metadata and override
     try:
-        metadata = extract_meta_json(tree, metadata, backup_sitename)
+        metadata = extract_meta_json(tree, metadata, backup_sitename, include_organization_authors=False)
     except Exception as err:  # bugs in json_metadata.py
         LOGGER.warning("error in JSON metadata extraction: %s", err)
     # Twitter and app names rank below meta tags and JSON-LD, above a WebPage name
@@ -533,6 +541,13 @@ def extract_metadata(
     # author
     if not metadata.author:
         metadata.author = extract_author(tree)
+    # Preserve human byline precedence; an explicit organization author is a
+    # fallback when neither standard metadata nor article markup names a person.
+    if not metadata.author:
+        try:
+            metadata.author = extract_meta_json(tree, Document(url=metadata.url)).author
+        except Exception as err:
+            LOGGER.warning("error in organization author extraction: %s", err)
     # recheck author in blacklist
     if metadata.author and author_blacklist:
         metadata.author = check_authors(metadata.author, author_blacklist)

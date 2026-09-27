@@ -141,14 +141,16 @@ def is_plausible_sitename(metadata: Document, candidate: Any, content_type: str 
     return False
 
 
-def _json_author_name(author: Any) -> str | None:
-    "Return the name of a Person author item, a bare string is a name."
+def _json_author_name(author: Any, organizations: bool = False) -> str | None:
+    "Return the name of a Person author item (or of an Organization, when asked), a bare string is a name."
     if isinstance(author, str):
         return author
-    if not isinstance(author, dict) or (
-        "@type" in author and "person" not in {t.lower() for t in as_list(author["@type"]) if isinstance(t, str)}
-    ):
+    if not isinstance(author, dict):
         return None
+    if "@type" in author:
+        kinds = {t.rsplit("/", 1)[-1].lower() for t in as_list(author["@type"]) if isinstance(t, str)}
+        if not kinds & ({"person", "organization"} if organizations else {"person"}):
+            return None
     name = author.get("name")
     if isinstance(name, list):
         name = "; ".join(n for n in name if isinstance(n, str)).strip("; ")
@@ -159,7 +161,9 @@ def _json_author_name(author: Any) -> str | None:
     return name if isinstance(name, str) else None
 
 
-def process_parent(parent: Any, metadata: Document, backup_sitename: str | None = None) -> Document:
+def process_parent(
+    parent: Any, metadata: Document, backup_sitename: str | None = None, *, include_organization_authors: bool = True
+) -> Document:
     "Find and extract selected metadata from JSON parts."
     content: dict[str, Any]
     webpage_name = None
@@ -211,7 +215,7 @@ def process_parent(parent: Any, metadata: Document, backup_sitename: str | None 
                 with suppress(json.JSONDecodeError):
                     authors = json.loads(authors)
             for author in as_list(authors):
-                if (name := _json_author_name(author)) is not None:
+                if (name := _json_author_name(author, include_organization_authors)) is not None:
                     metadata.author = normalize_authors(metadata.author, name)
 
             # category
@@ -255,7 +259,13 @@ def extract_json_image(value: Any, references: dict[str, Any]) -> str | None:
     return None
 
 
-def extract_json(schema: list[Any] | dict[str, str], metadata: Document, backup_sitename: str | None = None) -> Document:
+def extract_json(
+    schema: list[Any] | dict[str, str],
+    metadata: Document,
+    backup_sitename: str | None = None,
+    *,
+    include_organization_authors: bool = True,
+) -> Document:
     """Parse and extract metadata from JSON-LD data.
 
     Note: baseline.py's `_walk_json` also walks JSON-LD, for page content rather than
@@ -297,7 +307,7 @@ def extract_json(schema: list[Any] | dict[str, str], metadata: Document, backup_
                 if metadata.image:
                     break
 
-    return process_parent(parents, metadata, backup_sitename)
+    return process_parent(parents, metadata, backup_sitename, include_organization_authors=include_organization_authors)
 
 
 def extract_json_author(elemtext: str, regular_expression: Pattern[str]) -> str | None:
