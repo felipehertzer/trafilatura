@@ -427,7 +427,7 @@ AUTHOR_DISCARD_XPATHS = [
         .//*[self::a or self::div or self::section or self::span][
         @id='comments' or @class='comments' or @class='title' or @class='date' or
         (@id and re:test(@id, '^comments|comment-?list|ProductReviews')) or
-        (@class and re:test(@class, '^[Cc]omments|commentlist|comments-list|sidebar|is-hidden|quote|embedly-instagram|article-(?:share|support)|print|category|meta-date|meta-reviewer')) or
+        (@class and re:test(@class, '^[Cc]omments|commentlist|comments-list|sidebar|is-hidden|quote|embedly-instagram|article-(?:share|support)|print|category|meta-date|meta-reviewer|meta-status')) or
         contains(@data-component, 'Figure')]
         """,
         namespaces={"re": REGEXP_NS},
