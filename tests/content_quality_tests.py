@@ -10,6 +10,16 @@ URL = "https://example.org/story"
 IMAGE = "https://example.org/article.jpg"
 
 
+def test_author_excludes_embedded_script_and_style_text():
+    page = (
+        '<html><body><span class="author">ANI'
+        '<script>var news_msid = 123; console.log(news_msid);</script>'
+        '<style>.byline { display: block; }</style>'
+        '</span></body></html>'
+    )
+    assert extract_metadata(page).author == "ANI"
+
+
 def test_author_credit_excludes_review_status_badge():
     page = (
         '<html><body><div class="article-meta-byline">'
