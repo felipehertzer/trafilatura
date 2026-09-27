@@ -10,6 +10,17 @@ URL = "https://example.org/story"
 IMAGE = "https://example.org/article.jpg"
 
 
+def test_author_credit_excludes_review_status_badge():
+    page = (
+        '<html><body><div class="article-meta-byline">'
+        '<span class="article-meta-source"><a href="/source">Kennesaw State University</a></span>'
+        '<span class="article-meta-date">Sep 26 2026</span>'
+        '<span class="article-meta-status"><a href="#">Reviewed</a></span>'
+        '</div></body></html>'
+    )
+    assert extract_metadata(page).author == "Kennesaw State University"
+
+
 @pytest.mark.parametrize("author", ["Jane Smith", "Daily Cargo News"])
 def test_author_profile_link_excludes_surrounding_social_navigation(author):
     page = (
