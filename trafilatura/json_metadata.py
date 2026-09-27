@@ -92,6 +92,7 @@ AUTHOR_VISUAL_CREDIT = re.compile(
     r"\s+by\b.*$",
     flags=re.IGNORECASE,
 )
+AUTHOR_WORD_START = re.compile(r"(\w)(\w*)")
 AUTHOR_REMOVE_NUMBERS = re.compile(r"\d.+?$")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
 AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
@@ -406,9 +407,11 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         # simple heuristics, regex or vowel tests also possible
         if not author or (len(author) >= 50 and " " not in author and "-" not in author):
             continue
-        # title case
+        # title case; an all-capitals byline ("VANESSA PAIGE CHELVAN") is a style
         if not author[0].isupper():
             author = author.title()
+        elif " " in author and author.isupper():
+            author = AUTHOR_WORD_START.sub(lambda m: m[1] + m[2].lower(), author)
         # Publishers may mix typographic and ASCII apostrophes across metadata
         # fields. Keep the first display spelling without duplicating the byline.
         author_key = author.translate(str.maketrans("‘’", "''")).casefold()

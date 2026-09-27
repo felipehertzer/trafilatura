@@ -221,7 +221,7 @@ def test_author_from_markup():
         ),
         (
             f'{begin}<div><strong><a class="d1dba0c3091a3c30ebd6" data-testid="AuthorURL" href="/by/p535y1">AUTHOR NAME</a></strong></div>{end}',
-            "AUTHOR NAME",
+            "Author Name",
         ),
     ]
     for doc, expected in cases:

@@ -132,3 +132,37 @@ def test_article_sections_accept_only_strings():
     article = {"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Storm hits coast",
                "articleSection": ["Weather", None, 3]}
     assert extract_metadata(page(ld(article))).categories == ["Weather"]
+
+
+def test_quote_truncated_meta_title_uses_title_element():
+    head = '<title>Mojtaba Khamenei was "pulled from rubble" of hospital: Report</title>'
+    head += '<meta property="og:title" content="Mojtaba Khamenei was "pulled from rubble" of hospital: Report">'
+    assert extract_metadata(page(head)).title == 'Mojtaba Khamenei was "pulled from rubble" of hospital: Report'
+
+
+def test_complete_meta_title_is_kept():
+    head = '<title>Storm hits coast | Example</title><meta property="og:title" content="Storm hits coast">'
+    assert extract_metadata(page(head)).title == "Storm hits coast"
+
+
+def test_all_capitals_bylines_are_title_cased():
+    assert normalize_authors(None, "VANESSA PAIGE CHELVAN; NICOLAS VAUX-MONTAGNY") == "Vanessa Paige Chelvan; Nicolas Vaux-Montagny"
+    assert normalize_authors(None, "AAP") == "AAP"
+    assert normalize_authors(None, "Jane McDonald") == "Jane McDonald"
+
+
+def test_infinite_scroll_keeps_current_article():
+    url = "https://news.example.com/story"
+    body = (
+        '<section><div class="box-wrap infinite-scroll">'
+        f'<article class="box open" rel="{url}/"><h1>Storm</h1><p>' + PARAGRAPH * 4 + "</p></article>"
+        '<article class="box" rel="https://news.example.com/other"><p>Another story entirely about football results.</p></article>'
+        "</div></section>"
+    )
+    text = bare_extraction(page("", body, url), url=url).text
+    assert "new bridge" in text and "football results" not in text
+
+
+def test_infinite_scroll_without_permalink_is_still_removed():
+    body = "<article><p>" + PARAGRAPH * 3 + '</p></article><div class="infinite-scroll"><p>' + "Appended story text. " * 20 + "</p></div>"
+    assert "Appended story" not in bare_extraction(page("", body)).text

@@ -365,6 +365,23 @@ def strip_site_suffix(
     return title
 
 
+QUOTE_CHARS = frozenset('"“”')
+
+
+def restore_quote_truncated_title(tree: HtmlElement, title: str) -> str:
+    """Use <title> when a meta title stops where the headline opens a quotation.
+
+    ``content="He was "pulled from rubble""`` ends the attribute at the inner
+    quote; the <title> element still holds the complete headline.
+    """
+    head = " ".join(title.split())
+    for element in tree.xpath(".//head/title"):
+        full = " ".join(element.text_content().split())
+        if len(head) >= 10 and full.startswith(head) and full[len(head) :].lstrip()[:1] in QUOTE_CHARS:
+            return full
+    return title
+
+
 def extract_title(tree: HtmlElement) -> str | None:
     """Extract the document title"""
     # only one h1-element: take it
@@ -583,6 +600,10 @@ def extract_metadata(
         mymatch = META_URL.match(metadata.url)
         if mymatch:
             metadata.sitename = mymatch[1]
+
+    # an unescaped quote in a meta attribute cuts the headline short
+    if metadata.title:
+        metadata.title = restore_quote_truncated_title(tree, metadata.title)
 
     # drop a trailing branding segment copied from og:title or <title>
     if metadata.title:
