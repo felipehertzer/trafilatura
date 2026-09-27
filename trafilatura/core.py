@@ -37,6 +37,7 @@ from .utils import (
 )
 from .xml import build_json_output, control_xml_output, delete_element, keeps_empty, xmltocsv, xmltotxt
 from .xpaths import (
+    APPENDED_ARTICLES_XPATH,
     RAW_TREE_PRUNE_XPATH,
     REMOVE_COMMENTS_AND_LISTS_XPATH,
     REMOVE_COMMENTS_XPATH,
@@ -141,6 +142,51 @@ def _forum_thread_page(tree: HtmlElement) -> bool:
     )
 
 
+_PERMALINK_ATTRS = ("rel", "data-url", "data-permalink", "data-href", "data-link", "data-post-url")
+
+
+def _url_key(value: str | None) -> str:
+    if not value:
+        return ""
+    value = value.strip().split("#", 1)[0].split("?", 1)[0].rstrip("/")
+    return re.sub(r"^https?://(?:www\.)?", "", value, flags=re.IGNORECASE).casefold()
+
+
+def prune_appended_articles(tree: HtmlElement, url: str | None) -> HtmlElement:
+    """Keep the current article of an infinite-scroll container, dropping the follow-ups.
+
+    Some themes append later stories after the article (``mvp-post-add``); others
+    render the current article inside the same infinite-scroll container, marked
+    with its own permalink. The marked article survives; its appended siblings go.
+    The emptied container is unwrapped so that RAW_TREE_PRUNE_XPATH, which decides
+    on the containers without such a mark, does not prune the current article.
+    """
+    keys = {_url_key(url)} | {_url_key(href) for href in tree.xpath('//link[@rel="canonical"]/@href')}
+    keys.discard("")
+    for expression in APPENDED_ARTICLES_XPATH:
+        for container in expression(tree):
+            if container.getparent() is None:
+                continue
+            current = next(
+                (
+                    element
+                    for element in container.iterdescendants()
+                    if isinstance(element.tag, str)
+                    and any(_url_key(element.get(attr)) in keys for attr in _PERMALINK_ATTRS if element.get(attr))
+                ),
+                None,
+            )
+            if current is None:
+                continue
+            while current.getparent() is not container:
+                current = current.getparent()
+            for child in list(container):
+                if child is not current and isinstance(child.tag, str):
+                    child.drop_tree()
+            container.drop_tag()
+    return tree
+
+
 def _prepare_tree(tree: HtmlElement, options: Extractor, url: str | None) -> HtmlElement:
     "Clean and convert a copy of the raw tree."
     return convert_tags(tree_cleaning(copy(tree), options), options, url)
@@ -184,6 +230,7 @@ def trafilatura_sequence(
     is_forum = _forum_thread_page(tree)
     # raw-tree prune so the external extractors inherit it too: readability would otherwise
     # pick the longest appended article over the real one
+    tree = prune_appended_articles(tree, url)
     tree = prune_unwanted_nodes(tree, RAW_TREE_PRUNE_XPATH)
     # comments off: prune the raw tree so all stages inherit it, lists are still ol/ul here
     if not options.comments and (options.focus == "precision" or not is_forum):

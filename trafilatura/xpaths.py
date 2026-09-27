@@ -179,6 +179,19 @@ REMOVE_COMMENTS_AND_LISTS_XPATH = [
 # or self::span
 # or contains(@class, 'comment') or contains(@id, 'comment')
 
+# Infinite-scroll containers, whatever they hold: core.prune_appended_articles() keeps the
+# article marked with the page's permalink in any of them and drops its appended siblings.
+APPENDED_ARTICLES_XPATH = [
+    XPath(
+        """
+        .//*[self::div or self::section or self::aside][
+        (@id and re:test(@id, 'mvp-post-add-(?:box|wrap)|infinite-?scroll')) or
+        (@class and re:test(@class, 'mvp-post-add-(?:box|wrap)|infinite-?scroll'))]
+        """,
+        namespaces={"re": REGEXP_NS},
+    )
+]
+
 # Raw-tree prune, kept out of OVERALL_DISCARD_XPATH because its over-pruning guard would revert it.
 RAW_TREE_PRUNE_XPATH = [
     # Keep an infinite-scroll shell holding an h1, or the first h2 if no h1
