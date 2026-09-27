@@ -170,14 +170,18 @@ def extract_meta_json(tree: HtmlElement, metadata: Document) -> Document:
     for elem in tree.xpath('.//script[@type="application/ld+json" or @type="application/settings+json"]'):
         if not elem.text:
             continue
-        element_text = normalize_json(JSON_MINIFY.sub(r"\1", elem.text))
         try:
-            # strict=False: trim() handles \n\r\t, but strict JSON rejects the full 0x00-0x1F
-            # range; rarer control chars (from encoding issues) would otherwise raise here
-            schema = json.loads(element_text, strict=False)
-            metadata = extract_json(schema, metadata)
+            # Decode before text normalization: escaped or entity-encoded quotes
+            # inside valid strings must not become JSON delimiters.
+            schema = json.loads(elem.text, strict=False)
         except json.JSONDecodeError:
-            metadata = extract_json_parse_error(element_text, metadata)
+            element_text = normalize_json(JSON_MINIFY.sub(r"\1", elem.text))
+            try:
+                schema = json.loads(element_text, strict=False)
+            except json.JSONDecodeError:
+                metadata = extract_json_parse_error(element_text, metadata)
+                continue
+        metadata = extract_json(schema, metadata)
     return metadata
 
 

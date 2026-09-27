@@ -334,7 +334,10 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         # title case
         if not author[0].isupper():
             author = author.title()
-        if author not in new_authors:
+        # Publishers may mix typographic and ASCII apostrophes across metadata
+        # fields. Keep the first display spelling without duplicating the byline.
+        author_key = author.translate(str.maketrans("‘’", "''")).casefold()
+        if not any(name.translate(str.maketrans("‘’", "''")).casefold() == author_key for name in new_authors):
             new_authors.append(author)
     # keep only the fullest form of each name (drop names contained in another)
     new_authors = [n for n in new_authors if not any(n != m and n in m for m in new_authors)]
