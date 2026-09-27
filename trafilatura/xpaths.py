@@ -157,7 +157,9 @@ REMOVE_COMMENTS_XPATH = [
         re:test(@class, '^[Cc]omment|(?:^|\\s)(?!(?:has|no|with|show|open|closed)-)[\\w]+-comments(?:\\s|$)')]
         """,
         namespaces={"re": REGEXP_NS},
-    )
+    ),
+    # Viafoura comment widgets (class viafoura* or custom <vf-*> elements)
+    XPath(".//*[contains(@class, 'viafoura') or starts-with(local-name(), 'vf-')]"),
 ]
 # or self::span
 # or contains(@class, 'comment') or contains(@id, 'comment')

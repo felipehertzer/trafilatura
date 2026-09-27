@@ -160,9 +160,32 @@ def test_infinite_scroll_keeps_current_article():
         "</div></section>"
     )
     text = bare_extraction(page("", body, url), url=url).text
-    assert "new bridge" in text and "football results" not in text
+    assert "new bridge" in text
+    assert "football results" not in text
 
 
 def test_infinite_scroll_without_permalink_is_still_removed():
     body = "<article><p>" + PARAGRAPH * 3 + '</p></article><div class="infinite-scroll"><p>' + "Appended story text. " * 20 + "</p></div>"
     assert "Appended story" not in bare_extraction(page("", body)).text
+
+
+def test_select_options_do_not_steer_readability():
+    from trafilatura.readability_lxml import Document as ReadabilityDocument
+
+    options = "".join(f"<option>Country number {i} with a long descriptive name</option>" for i in range(200))
+    html = page("", f"<form><select>{options}</select></form><article><p>" + PARAGRAPH * 6 + "</p></article>")
+    from trafilatura.utils import load_html
+
+    summary = ReadabilityDocument(load_html(html)).summary()
+    assert "new bridge" in summary
+    assert "Country number" not in summary
+
+
+def test_viafoura_comment_widgets_are_removed():
+    body = (
+        "<article><p>" + PARAGRAPH * 4 + "</p>"
+        '<div class="viafoura"><vf-conversations><p>You must confirm your public display name before commenting.</p>'
+        "</vf-conversations></div></article>"
+    )
+    text = bare_extraction(page("", body), include_comments=False).text
+    assert "public display name" not in text
