@@ -166,16 +166,24 @@ def _json_author_name(author: Any, organizations: bool = False) -> str | None:
     return name if isinstance(name, str) else None
 
 
+def _json_objects(parent: Any) -> list[dict[str, Any]]:
+    "JSON-LD objects from a node list, flattening nested lists and skipping scalars or nulls."
+    objects: list[dict[str, Any]] = []
+    for item in as_list(parent):
+        if isinstance(item, dict):
+            objects.append(item)
+        elif isinstance(item, list):
+            objects.extend(_json_objects(item))
+    return objects
+
+
 def process_parent(
     parent: Any, metadata: Document, backup_sitename: str | None = None, *, include_organization_authors: bool = True
 ) -> Document:
     "Find and extract selected metadata from JSON parts."
-    content: dict[str, Any]
     webpage_name = None
-    for content in parent:
-        # one malformed item must not discard the others
-        if not isinstance(content, dict):
-            continue
+    # one malformed item must not discard the others
+    for content in _json_objects(parent):
         # publisher may be a bare string, not a dict
         publisher = content.get("publisher")
         if isinstance(publisher, dict) and is_plausible_sitename(metadata, publisher.get("name")):
