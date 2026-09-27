@@ -124,10 +124,20 @@ def is_plausible_sitename(metadata: Document, candidate: Any, content_type: str 
     return False
 
 
+def _json_objects(parent: Any) -> list[dict[str, Any]]:
+    "JSON-LD objects from a node list, flattening nested lists and skipping scalars or nulls."
+    objects: list[dict[str, Any]] = []
+    for item in as_list(parent):
+        if isinstance(item, dict):
+            objects.append(item)
+        elif isinstance(item, list):
+            objects.extend(_json_objects(item))
+    return objects
+
+
 def process_parent(parent: Any, metadata: Document, *, include_organization_authors: bool = True) -> Document:
     "Find and extract selected metadata from JSON parts."
-    content: dict[str, Any]
-    for content in filter(None, parent):
+    for content in _json_objects(parent):
         # publisher may be a bare string, not a dict
         publisher = content.get("publisher")
         if isinstance(publisher, dict) and is_plausible_sitename(metadata, publisher.get("name")):
@@ -200,10 +210,8 @@ def process_parent(parent: Any, metadata: Document, *, include_organization_auth
 
             # category
             if not metadata.categories and "articleSection" in content:
-                if isinstance(content["articleSection"], str):
-                    metadata.categories = [content["articleSection"]]
-                else:
-                    metadata.categories = list(filter(None, content["articleSection"]))
+                sections = as_list(content["articleSection"])
+                metadata.categories = [s for s in sections if isinstance(s, str) and s]
 
             # try to extract title; the article headline also replaces a meta
             # title that is that headline followed by site or section branding
