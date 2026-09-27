@@ -386,6 +386,23 @@ def strip_title_branding(title: str, tree: HtmlElement) -> str:
     return title
 
 
+QUOTE_CHARS = frozenset('"“”')
+
+
+def restore_quote_truncated_title(tree: HtmlElement, title: str) -> str:
+    """Use <title> when a meta title stops where the headline opens a quotation.
+
+    ``content="He was "pulled from rubble""`` ends the attribute at the inner
+    quote; the <title> element still holds the complete headline.
+    """
+    head = " ".join(title.split())
+    for element in tree.xpath(".//head/title"):
+        full = " ".join(element.text_content().split())
+        if len(head) >= 10 and full.startswith(head) and full[len(head) :].lstrip()[:1] in QUOTE_CHARS:
+            return full
+    return title
+
+
 def extract_title(tree: HtmlElement) -> str | None:
     """Extract the document title"""
     # only one h1-element: take it
@@ -606,10 +623,6 @@ def extract_metadata(
         if mymatch:
             metadata.sitename = mymatch[1]
 
-    # drop a trailing branding segment copied from og:title or <title>
-    if isinstance(metadata.title, str):
-        metadata.title = strip_title_branding(metadata.title, tree)
-
     # categories
     if not metadata.categories:
         metadata.categories = extract_catstags("category", tree)
@@ -626,6 +639,10 @@ def extract_metadata(
     metadata.clean_and_trim()
 
     if metadata.title:
+        # an unescaped quote in a meta attribute cuts the headline short
+        metadata.title = restore_quote_truncated_title(tree, metadata.title)
+        # drop the branding after the page's own headline, then a last segment naming the site
+        metadata.title = strip_title_branding(metadata.title, tree)
         metadata.title = strip_site_suffix(metadata.title, metadata.sitename, metadata.hostname)
     # a dot in the first segment means a host or junk, e.g. 'cdn.org/i.jpg'
     image = metadata.image
