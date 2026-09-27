@@ -418,6 +418,7 @@ def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
         or elem.get("id") == "author"
         or elem.get("class") == "author"
         or elem.get("itemprop") == "author name"
+        or (elem.tag == "a" and "author-link" in elem.get("class", "").split())
         or elem.get("data-testid") in ("AuthorCard", "AuthorURL")
         or AUTHOR_CLASS_SPECIFIC.search(elem.get("class", ""))
     ]
