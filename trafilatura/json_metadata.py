@@ -105,6 +105,11 @@ AUTHOR_PREFIX = re.compile(
     r"^(?:(?:[\wäöüß]+\s+){0,4}?by(?:\s+|$)|([a-zäöüß]+(ed|t))? ?(written by|words by|words|by|von|from|por|par|door) )",
     flags=re.IGNORECASE,
 )
+AUTHOR_VISUAL_CREDIT = re.compile(
+    r"(?:\s*[|,;/]|\s+(?:and|with))?\s*\b(?:photography|photos?|pictures?|illustrations?|graphics?|video|visuals?)"
+    r"\s+by\b.*$",
+    flags=re.IGNORECASE,
+)
 AUTHOR_REMOVE_NUMBERS = re.compile(r"(?:\b\d.|\d+\s).*$")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
 AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
@@ -430,6 +435,8 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author_string = unescape(author_string)
     # remove html tags and email addresses
     author_string = AUTHOR_EMAIL.sub("", HTML_STRIP_TAGS.sub("", author_string))
+    # a byline may also credit visual contributors ("| Photography by X for WSJ")
+    author_string = AUTHOR_VISUAL_CREDIT.sub("", author_string)
     author_string = AUTHOR_DATELINE.sub("", author_string)
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
