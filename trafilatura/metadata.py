@@ -603,13 +603,17 @@ def extract_metadata(
     if metadata.author and " " not in metadata.author:
         metadata.author = None
 
-    # fix: try json-ld metadata and override
+    # fix: try json-ld metadata and override; article Person authors replace
+    # free-text meta bylines, which can also credit photographers or desks
+    meta_author, metadata.author = metadata.author, None
     try:
         metadata = extract_meta_json(tree, metadata, backup_sitename, include_organization_authors=False)
     except Exception as err:  # bugs in json_metadata.py
         LOGGER.warning("error in JSON metadata extraction: %s", err)
     # Twitter and app names rank below meta tags and JSON-LD, above a WebPage name
     metadata.sitename = metadata.sitename or backup_sitename
+    if not metadata.author:
+        metadata.author = meta_author
 
     # title
     if not metadata.title:

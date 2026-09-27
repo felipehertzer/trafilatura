@@ -245,6 +245,12 @@ def process_parent(
                     metadata.title = content["name"]
                 elif "headline" in content:
                     metadata.title = content["headline"]
+            # the article headline also replaces a meta title that is that
+            # headline followed by site or section branding
+            elif isinstance(metadata.title, str):
+                headline = content["name"] if "name" in content and content_type == "article" else content.get("headline")
+                if isinstance(headline, str) and headline.strip() and is_branded_headline(metadata.title, headline):
+                    metadata.title = headline
     if not backup_sitename and is_plausible_sitename(metadata, webpage_name, "webpage"):
         metadata.sitename = webpage_name
     return metadata
@@ -260,6 +266,18 @@ def is_schema_org_context(context: Any) -> bool:
     if isinstance(context, list):
         return any(is_schema_org_context(item) for item in context)
     return False
+
+
+TITLE_SUFFIX_SEPARATORS = frozenset("|-–—·•:")
+
+
+def is_branded_headline(title: str, headline: str) -> bool:
+    """True when a meta title is the article headline plus a separated suffix."""
+    title = " ".join(unescape(title).split())
+    headline = " ".join(unescape(headline).split())
+    if not headline or title == headline or not title.startswith(headline):
+        return False
+    return title[len(headline) :].lstrip()[:1] in TITLE_SUFFIX_SEPARATORS
 
 
 def extract_json_image(value: Any, references: dict[str, Any]) -> str | None:
