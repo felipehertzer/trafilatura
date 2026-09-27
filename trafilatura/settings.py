@@ -340,6 +340,7 @@ CUT_EMPTY_ELEMS = {
 # order could matter, using lists to keep extraction deterministic
 MANUALLY_CLEANED = [
     # important
+    "template",  # inert markup: never rendered, often a CMS placeholder
     "aside",
     "embed",
     "fencedframe",
@@ -416,7 +417,6 @@ MANUALLY_STRIPPED = [
     "ruby",
     "small",
     "tbody",
-    "template",
     "tfoot",
     "thead",
     # the HTML parser does not treat it as void: it would swallow the rest of the paragraph
