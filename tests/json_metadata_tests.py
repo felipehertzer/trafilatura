@@ -1106,6 +1106,10 @@ def test_normalize_authors():
     # dedup keeps the fullest form regardless of order
     assert normalize_authors("Smith", "John Smith") == "John Smith"
     assert normalize_authors("John Smith", "Smith") == "John Smith"
+    # a lead-in left by a removed date goes; a capitalized particle is a name
+    assert normalize_authors(None, "Jenny Smith on") == "Jenny Smith"
+    assert normalize_authors(None, "Par Jean Dupont le") == "Jean Dupont"
+    assert normalize_authors(None, "Anh To") == "Anh To"
 
 
 def test_normalize_authors_credit_lines():
