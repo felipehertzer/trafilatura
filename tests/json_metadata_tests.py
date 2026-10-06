@@ -1077,6 +1077,10 @@ def test_process_parent_keeps_good_sitename():
         ("Smith", "John Smith", "John Smith"),
         ("John Smith", "Smith", "John Smith"),
         ("John Doe", "John Doe", "John Doe"),
+        # a lead-in left by a removed date goes; a capitalized particle is a name
+        (None, "Jenny Smith on", "Jenny Smith"),
+        (None, "Par Jean Dupont le", "Jean Dupont"),
+        (None, "Anh To", "Anh To"),
     ],
 )
 def test_normalize_authors(current, new, expected):
