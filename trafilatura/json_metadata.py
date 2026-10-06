@@ -99,6 +99,9 @@ AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
 AUTHOR_REMOVE_NICKNAME = re.compile(r'["‘“({\[’\'][^"”]+?[‘’"”\')\]}]')
 AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|—|-|–)\s+(.*)", flags=re.IGNORECASE)
+# A date removed from a byline leaves its lead-in behind ("Jenny Smith on",
+# "Isabella DiBiase am"). Lower case only: a name capitalizes its particles.
+AUTHOR_TRAILING_PREPOSITION = re.compile(r"\s+(?:am|on|for|at|in|to|from|of|via|um|le|el|il)$")
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 # "with" joins two people too ("Reged Ahmad with Richard Luscombe").
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|·|•|(?:^|\W)[ua]nd(?:$|\W)|\bwith\b", flags=re.IGNORECASE)
@@ -539,6 +542,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_PREFIX.sub("", author)
         author = AUTHOR_REMOVE_NUMBERS.sub("", author)
         author = AUTHOR_REMOVE_PREPOSITION.sub("", author)
+        author = AUTHOR_TRAILING_PREPOSITION.sub("", author)
         # a reported-speech verb scraped with the name ("Charlotte Trueman say")
         author = AUTHOR_SPEECH_VERB.sub("", author)
         # skip empty or improbably long strings, companies and sentences
