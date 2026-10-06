@@ -184,6 +184,26 @@ def test_author_from_markup():
             f'{begin}<div class="byline-content"><div class="byline"><a>Jenny Smith</a></div><time>July 12, 2021 08:05</time></div>{end}',
             "Jenny Smith",
         ),
+        # AP before a reporter is credited: the byline holds only its timestamp
+        (
+            f'{begin}<div class="Page-byline"><div class="Page-byline-info"><div class="Page-dateModified"><bsp-timestamp data-timestamp="1791261269000"><span data-date="">Updated 3:34 PM AEDT, October 6, 2026</span></bsp-timestamp></div></div></div>{end}',
+            None,
+        ),
+        (
+            f'{begin}<div class="Page-byline"><div class="Page-byline-info"><div class="Page-authors"> By <a class="Link" href="https://apnews.com/author/jim-salter">JIM SALTER</a></div><div class="Page-dateModified"><bsp-timestamp data-timestamp="1791261269000"><span data-date="">Updated 3:34 PM AEDT, October 6, 2026</span></bsp-timestamp></div></div></div>{end}',
+            "Jim Salter",
+        ),
+        (f'{begin}<div class="byline">By Jenny Smith <span class="post-date">October 6, 2026</span></div>{end}', "Jenny Smith"),
+        (f'{begin}<div class="byline">Jenny Smith <span itemprop="datePublished">6 October 2026</span></div>{end}', "Jenny Smith"),
+        # a date element that is or holds the author is kept
+        (f'{begin}<div class="byline-date"><span class="author">Jenny Smith</span> May 18 2022</div>{end}', "Jenny Smith"),
+        (f'{begin}<p class="date-author">Janic Cathomen, 01.12.2021</p>{end}', "Janic Cathomen"),
+        # the date goes with its lead-in
+        (f'{begin}<div class="byline">By Jenny Smith on <span class="date">May 5, 2022</span></div>{end}', "Jenny Smith"),
+        (
+            f'{begin}<div class="group-author-inner">Von <a class="username">Isabella DiBiase</a> am <span class="date-display-single">Samstag, 19. Oktober 2019 um 11:14 Uhr</span></div>{end}',
+            "Isabella DiBiase",
+        ),
         (f'{begin}<h3 itemprop="author">Jenny Smith</h3>{end}', "Jenny Smith"),
         (
             f'{begin}<div class="article-meta article-meta-byline article-meta-with-photo article-meta-author-and-reviewer" itemprop="author" itemscope="" itemtype="http://schema.org/Person"><span class="article-meta-photo-wrap"><img src="" alt="Jenny Smith" itemprop="image" class="article-meta-photo"></span><span class="article-meta-contents"><span class="article-meta-author">By <a href="" itemprop="url"><span itemprop="name">Jenny Smith</span></a></span><span class="article-meta-date">May 18 2022</span><span class="article-meta-reviewer">Reviewed by <a href="">Robert Smith</a></span></span></div>{end}',

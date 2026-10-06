@@ -418,6 +418,19 @@ AUTHOR_DISCARD_XPATHS = [
         """,
         namespaces={"re": REGEXP_NS},
     ),
+    XPath(
+        # a timestamp in the byline is not a name: AP's "Updated 3:34 PM AEDT,
+        # October 6, 2026" (<bsp-timestamp data-timestamp> in "Page-dateModified")
+        # gave the author "October 6"; an element that is or holds the author
+        # ("date-author": "Janic Cathomen, 01.12.2021") stays
+        """
+        .//*[@datetime or @data-timestamp or @data-date or @data-datetime or
+        starts-with(@itemprop, 'date') or contains(local-name(), 'timestamp') or
+        re:test(@class, '(?:^|[\\s_-])(?:date|timestamp|pubdate)(?:[A-Z\\s_-]|$)')]
+        [not(descendant-or-self::*[re:test(@class, '[Aa]uthor|[Bb]yline') or @rel='author' or @itemprop='author'])]
+        """,
+        namespaces={"re": REGEXP_NS},
+    ),
     XPath("//time|//figure|//script|//style"),
 ]
 
