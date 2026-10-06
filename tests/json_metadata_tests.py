@@ -1108,6 +1108,59 @@ def test_normalize_authors():
     assert normalize_authors("John Smith", "Smith") == "John Smith"
 
 
+def test_normalize_authors_credit_lines():
+    "Credit lines, datelines, job titles and companies seen in news feeds."
+    # podcast credits as The Guardian's RSS dc:creator carries them
+    assert (
+        normalize_authors(
+            None,
+            "Presented by Reged Ahmad with Richard Luscombe. Produced by Taylah Strano with sound design "
+            "and mixing from Jacob Round. The executive producer is Hannah Parkes",
+        )
+        == "Reged Ahmad; Richard Luscombe; Taylah Strano; Jacob Round; Hannah Parkes"
+    )
+    assert (
+        normalize_authors(
+            None,
+            "Written by Samanth Subramanian and read by Mikhail Sen. Produced by Nicola Alexandrou. "
+            "The executive producer was Ellie Bury",
+        )
+        == "Samanth Subramanian; Mikhail Sen; Nicola Alexandrou; Ellie Bury"
+    )
+    assert (
+        normalize_authors(None, "Presented by Matilda Boseley. Produced by Sanjana Jose. Executive producer Shelley Hepworth")
+        == "Matilda Boseley; Sanjana Jose; Shelley Hepworth"
+    )
+    assert normalize_authors(None, "Isabella Lee with additional reporting by Alyx Gorman") == "Isabella Lee; Alyx Gorman"
+    assert normalize_authors(None, "Photographs and text by Giuseppe Nucci") == "Giuseppe Nucci"
+    assert normalize_authors(None, "Steven Band, as told to Deborah Solomon") == "Deborah Solomon"
+    assert normalize_authors(None, "View all posts by Daniel Lemire") == "Daniel Lemire"
+    # job titles after the name, only the title goes
+    assert normalize_authors(None, "Tom McIlroy Political editor") == "Tom McIlroy"
+    assert normalize_authors(None, "Graham Readfearn Environment and climate correspondent") == "Graham Readfearn"
+    assert normalize_authors(None, "Sarah Martin Chief political correspondent and Paul Karp") == "Sarah Martin; Paul Karp"
+    assert normalize_authors(None, "Mary Anne Smith editor") == "Mary Anne Smith"
+    assert normalize_authors(None, "By Staff Writer") == "Staff Writer"
+    assert normalize_authors(None, "Tracy Neal, Open Justice multimedia journalist") == "Tracy Neal"
+    # datelines run to the next person, commas included
+    assert normalize_authors(None, "Adam Morton in Nadi, Fiji") == "Adam Morton"
+    assert (
+        normalize_authors(None, "Jason Burke in London and Stephanie Kirchgaessner in Washington")
+        == "Jason Burke; Stephanie Kirchgaessner"
+    )
+    # wire credits in Spanish, Portuguese and French; "e" also joins Portuguese surnames
+    assert normalize_authors(None, "Por Noah Trister") == "Noah Trister"
+    assert normalize_authors(None, "Clara Preve e Isabel Debre") == "Clara Preve; Isabel Debre"
+    assert normalize_authors(None, "Isabel Debre y Clara Preve") == "Isabel Debre; Clara Preve"
+    assert normalize_authors(None, "João e Silva") == "João e Silva"
+    # companies, sentences, verbs and repeated spellings
+    assert normalize_authors(None, "Healthy Humor, Inc.") is None
+    assert normalize_authors(None, "Care Workers Will Be Reclassified") is None
+    assert normalize_authors(None, "Charlotte Trueman say") == "Charlotte Trueman"
+    assert normalize_authors(None, "Ben Grubb; Bengrubb") == "Ben Grubb"
+    assert normalize_authors(None, "Harrison East") == "Harrison East"
+
+
 def test_normalize_json():
     "Test JSON string normalization (escapes, surrogates, HTML)."
     assert normalize_json("Test \\nthis") == "Test this"

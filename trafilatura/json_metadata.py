@@ -84,7 +84,7 @@ JSON_HEADLINE = re.compile(r'"headline": ?"([^"\\]+)', re.DOTALL)
 JSON_SEQ = [('"name"', JSON_NAME), ('"headline"', JSON_HEADLINE)]
 
 AUTHOR_PREFIX = re.compile(
-    r"^([a-zäöüß]+(ed|t)|story|report|reporting|text|article|analysis)? ?(written by|words by|words|by|von|from) ",
+    r"^([a-zäöüß]+(ed|t)|story|report|reporting|text|article|analysis)? ?(written by|words by|words|by|von|from|por|par|door) ",
     flags=re.IGNORECASE,
 )
 AUTHOR_VISUAL_CREDIT = re.compile(
@@ -96,11 +96,89 @@ AUTHOR_WORD_START = re.compile(r"(\w)(\w*)")
 AUTHOR_REMOVE_NUMBERS = re.compile(r"\d.+?$")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
 AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
-AUTHOR_REMOVE_NICKNAME = re.compile(r'["‘({\[’\'][^"]+?[‘’"\')\]}]')
+AUTHOR_REMOVE_NICKNAME = re.compile(r'["‘“({\[’\'][^"”]+?[‘’"”\')\]}]')
 AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
-AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
+AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+# "with" joins two people too ("Reged Ahmad with Richard Luscombe").
+AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|·|•|(?:^|\W)[ua]nd(?:$|\W)|\bwith\b", flags=re.IGNORECASE)
+# "and" in Spanish, Portuguese, German and French wire credits ("Clara Preve e
+# Isabel Debre"); only between two full names, since "e" also joins Portuguese
+# surnames ("João e Silva").
+AUTHOR_FOREIGN_AND = re.compile(r"(?<=[^\W\d_]) (?:y|e|und|et) (?=[A-ZÀ-Þ])")
+AUTHOR_FULL_NAME = re.compile(r"[A-ZÀ-Þ][^\W\d_]*(?:\s+[A-ZÀ-Þ][^\W\d_]*)+")
+# A byline is often a credit line rather than a list: "Presented by Reged
+# Ahmad with Richard Luscombe. Produced by Taylah Strano with sound design and
+# mixing from Jacob Round. The executive producer is Hannah Parkes". Its
+# sentence breaks and credit phrases separate people.
+AUTHOR_SENTENCE_BREAK = re.compile(r"(?<=[a-z]{2})\.\s+(?=[A-Z])")
+AUTHOR_CREDIT_ROLE = (
+    r"(?:presented|produced|written|read|edited|hosted|narrated|reported|compiled|researched|filmed|translated|"
+    r"curated|interviews?|text|words|reporting|additional\s+reporting|sound\s+design|mixing|music|exclusive|"
+    r"analysis|commentary)"
+)
+AUTHOR_CREDIT = re.compile(
+    rf"\b(?:(?:photographs?|photos?|pictures?)\s+and\s+)?{AUTHOR_CREDIT_ROLE}(?:\s+and\s+{AUTHOR_CREDIT_ROLE})*"
+    r"\s+(?:by|from)\b"
+    r"|\b(?:the\s+)?(?:executive\s+|senior\s+|series\s+|supervising\s+|associate\s+)?"
+    r"(?:producers?|editors?|presenters?|hosts?)\s+(?:is|was|are|were)\b"
+    r"|\b(?:the\s+)?executive\s+producers?\b"
+    # an author page link: "View all posts by Daniel Lemire"
+    r"|\b(?:view|see|read)\s+(?:all|more)\s+(?:posts|articles|stories)\s+by\b",
+    flags=re.IGNORECASE,
+)
+# "Steven Band, as told to Deborah Solomon": the writer is the one told.
+AUTHOR_AS_TOLD_TO = re.compile(r"[^;|/]*\bas\s+told\s+to\b", flags=re.IGNORECASE)
+# A dateline runs to the next person, commas included: "Adam Morton in Nadi,
+# Fiji", "Jason Burke in London and Stephanie Kirchgaessner in Washington".
+AUTHOR_DATELINE = re.compile(r"\s+(?:in|at|reporting\s+from)\s+[A-ZÀ-Þ][^;|/&]*?(?=\s+(?:and|with)\s+|\s*[;|/&]|$)")
+AUTHOR_ROLE_WORDS = frozenset(
+    {
+        "editor", "correspondent", "reporter", "writer", "journalist", "producer", "columnist", "presenter",
+        "host", "contributor", "critic", "photographer", "spokesperson", "spokesman", "spokeswoman",
+        "commentator", "analyst", "anchor",
+    }
+)  # fmt: skip
+# After a comma, a role describes the person before it: "Tracy Neal, Open
+# Justice multimedia journalist", "Laurence Kelson, Census spokesperson".
+AUTHOR_DESCRIPTION = re.compile(
+    rf",[^,;|/&]*?\b(?:{'|'.join(sorted(AUTHOR_ROLE_WORDS))})s?\b[^,;|/&]*", flags=re.IGNORECASE
+)
+# The words of a job title before its role: "Political editor", "Senior
+# political correspondent", "Environment and climate correspondent".
+AUTHOR_TITLE_WORDS = frozenset(
+    {
+        "and", "political", "senior", "chief", "deputy", "environment", "consumer", "technology", "diplomatic",
+        "foreign", "business", "sports", "sport", "health", "science", "economics", "economic", "education",
+        "arts", "culture", "music", "film", "food", "travel", "fashion", "property", "legal", "crime",
+        "defence", "defense", "transport", "energy", "investigations", "investigative", "data", "digital",
+        "national", "state", "regional", "rural", "world", "global", "europe", "asia", "pacific", "media",
+        "social", "entertainment", "lifestyle", "finance", "markets", "managing", "executive", "associate",
+        "assistant", "contributing", "special", "staff", "local", "community", "multimedia", "news",
+        "features", "opinion", "politics", "climate", "medical",
+    }
+)  # fmt: skip
+AUTHOR_SEGMENT = re.compile(r"[^;|/,&]+")
+# Legal forms: a byline ending in one names a company, and the comma before one
+# ("Healthy Humor, Inc.") does not separate two names.
+AUTHOR_LEGAL_FORMS = frozenset(
+    {"inc", "llc", "llp", "ltd", "pty", "plc", "gmbh", "corp", "corporation", "limited", "incorporated", "bhd", "ulc", "pte"}
+)
+AUTHOR_LEGAL_COMMA = re.compile(
+    rf",\s*(?=(?:{'|'.join(sorted(AUTHOR_LEGAL_FORMS))})\b\.?\s*(?:[;|/&,]|$))", flags=re.IGNORECASE
+)
+AUTHOR_SPEECH_VERB = re.compile(r"\s+(?:say|says|said)$", flags=re.IGNORECASE)
+# Two of these in one byline make it a sentence, not a name.
+AUTHOR_SENTENCE_WORDS = frozenset(
+    {
+        "the", "is", "are", "was", "were", "be", "been", "will", "would", "can", "could", "has", "have", "had",
+        "that", "this", "it", "its", "their", "they", "we", "you", "how", "why", "what", "when", "who", "not",
+        "after", "before", "while", "into", "about", "than", "more", "most", "just", "all", "here", "there",
+        "my", "your", "our", "his", "her", "him", "them", "she", "he", "do", "does", "did", "to", "for", "on",
+        "out", "up", "over", "if", "or", "but", "so",
+    }
+)  # fmt: skip
+AUTHOR_WORD = re.compile(r"[^\W\d_]+")
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -368,6 +446,63 @@ def normalize_json(string: str) -> str:
     return trim(HTML_STRIP_TAGS.sub("", string))
 
 
+def _strip_job_title(segment: str) -> str:
+    """Drop a job title after a name: "Tom McIlroy Political editor" -> "Tom McIlroy".
+
+    From the third word on, the title is a role and the words before it that
+    are lower case, "and" or a title word. Only the title goes: "Sarah Martin
+    Chief political correspondent and Paul Karp" keeps Paul Karp.
+    """
+    tokens = segment.split()
+    # the name starts after a credit word ("By Staff Writer" is a role, not a name)
+    start = 1 if tokens and tokens[0].casefold() in {"by", "por", "par", "door", "von"} else 0
+    role = next((index for index, token in enumerate(tokens) if token.casefold() in AUTHOR_ROLE_WORDS), None)
+    if role is None or role < start + 2:
+        return segment
+    end = role
+    while end > start + 2 and (tokens[end - 1].islower() or tokens[end - 1].casefold() in AUTHOR_TITLE_WORDS):
+        end -= 1
+    return " " + " ".join(tokens[:end] + tokens[role + 1 :]) + " "
+
+
+def _join_foreign_and(author_string: str) -> str:
+    """Separate two full names joined by a foreign "and"; keep a compound surname."""
+    parts = AUTHOR_FOREIGN_AND.split(author_string)
+    joined = parts[0]
+    for connector, part in zip(AUTHOR_FOREIGN_AND.findall(author_string), parts[1:], strict=True):
+        left = re.split(r"[;|/,&]", joined)[-1].strip()
+        right = re.split(r"[;|/,&]", part)[0].strip()
+        full = AUTHOR_FULL_NAME.fullmatch(left) and AUTHOR_FULL_NAME.fullmatch(right)
+        joined += ("; " if full else connector) + part
+    return joined
+
+
+def _separate_credits(author_string: str) -> str:
+    """Turn a credit line into a list of people the split below can read."""
+    author_string = _join_foreign_and(author_string)
+    author_string = AUTHOR_SENTENCE_BREAK.sub("; ", author_string)
+    author_string = AUTHOR_CREDIT.sub("; ", author_string)
+    author_string = AUTHOR_AS_TOLD_TO.sub("", author_string)
+    author_string = AUTHOR_DATELINE.sub("", author_string)
+    author_string = AUTHOR_LEGAL_COMMA.sub(" ", author_string)
+    author_string = AUTHOR_DESCRIPTION.sub("", author_string)
+    return AUTHOR_SEGMENT.sub(lambda match: _strip_job_title(match.group()), author_string)
+
+
+def _is_name(author: str) -> bool:
+    """Whether a cleaned byline part can be a name: not a company, not a sentence."""
+    words = [word.casefold() for word in AUTHOR_WORD.findall(author)]
+    if not words or words[-1] in AUTHOR_LEGAL_FORMS:
+        return False
+    sentence = sum(word in AUTHOR_SENTENCE_WORDS for word in words)
+    return sentence < 2 and not (sentence and len(words) >= 4)
+
+
+def _name_key(author: str) -> str:
+    """The letters of a name: "Ben Grubb" and "Bengrubb" are one name."""
+    return "".join(AUTHOR_WORD.findall(author.translate(str.maketrans("‘’", "''")))).casefold()
+
+
 def normalize_authors(current_authors: str | None, author_string: str) -> str | None:
     """Normalize author info to focus on author names only"""
     new_authors = []
@@ -388,6 +523,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
     author_string = HTML_STRIP_TAGS.sub("", author_string)
     # a byline may also credit visual contributors ("| Photography by X for WSJ")
     author_string = AUTHOR_VISUAL_CREDIT.sub("", author_string)
+    author_string = _separate_credits(author_string)
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
         author = trim(author)
@@ -403,19 +539,22 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_PREFIX.sub("", author)
         author = AUTHOR_REMOVE_NUMBERS.sub("", author)
         author = AUTHOR_REMOVE_PREPOSITION.sub("", author)
-        # skip empty or improbably long strings
+        # a reported-speech verb scraped with the name ("Charlotte Trueman say")
+        author = AUTHOR_SPEECH_VERB.sub("", author)
+        # skip empty or improbably long strings, companies and sentences
         # simple heuristics, regex or vowel tests also possible
-        if not author or (len(author) >= 50 and " " not in author and "-" not in author):
+        if not author or (len(author) >= 50 and " " not in author and "-" not in author) or not _is_name(author):
             continue
         # title case; an all-capitals byline ("VANESSA PAIGE CHELVAN") is a style
         if not author[0].isupper():
             author = author.title()
         elif " " in author and author.isupper():
             author = AUTHOR_WORD_START.sub(lambda m: m[1] + m[2].lower(), author)
-        # Publishers may mix typographic and ASCII apostrophes across metadata
-        # fields. Keep the first display spelling without duplicating the byline.
-        author_key = author.translate(str.maketrans("‘’", "''")).casefold()
-        if not any(name.translate(str.maketrans("‘’", "''")).casefold() == author_key for name in new_authors):
+        # Publishers may mix typographic and ASCII apostrophes, spaces and
+        # hyphens across metadata fields ("Ben Grubb", "Bengrubb"). Keep the
+        # first display spelling without duplicating the byline.
+        author_key = _name_key(author)
+        if not any(_name_key(name) == author_key for name in new_authors):
             new_authors.append(author)
     # keep only the fullest form of each name (drop names contained in another)
     new_authors = [n for n in new_authors if not any(n != m and n in m for m in new_authors)]
