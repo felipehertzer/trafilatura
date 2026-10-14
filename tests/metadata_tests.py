@@ -493,6 +493,66 @@ def test_extract_json_null_author():
     assert metadata.author is None
 
 
+_ARTICLE_NODE = (
+    '{"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Storm <em>hits</em> coast", '
+    '"author": {"@type": "Person", "name": "Jane Doe"}, "articleSection": "<b>Weather</b>"}'
+)
+
+
+def _json_ld_page(payload: str) -> str:
+    return f'<html><head><script type="application/ld+json">{payload}</script></head><body></body></html>'
+
+
+def test_extract_meta_json_decodes_before_cleaning():
+    "regression: once a JSON-LD block holds a backslash, cleaning its raw text turned &quot; \
+    into a string delimiter; decoded values are still cleaned of entities and markup."
+    payload = (
+        '{"@context": "https://schema.org", "@type": "NewsArticle", '
+        '"headline": "A &quot;quoted&quot; <em>path</em>: C:\\\\new", '
+        '"author": {"@type": "Person", "name": "Jane Doe"}}'
+    )
+    metadata = extract_meta_json(html.fromstring(_json_ld_page(payload)), Document())
+    assert metadata.title == 'A "quoted" path: C:\\new'
+    assert metadata.author == "Jane Doe"
+    metadata = extract_meta_json(html.fromstring(_json_ld_page(_ARTICLE_NODE)), Document())
+    assert (metadata.title, metadata.categories) == ("Storm hits coast", ["Weather"])
+
+
+@pytest.mark.parametrize("payload", ["[null, {node}]", '["x", {node}]', "[[{node}]]", "[1, [null, {node}]]"])
+def test_extract_meta_json_skips_malformed_nodes(payload):
+    "regression: a null, scalar or nested-list node before the article must not abort the block."
+    doc = _json_ld_page(payload.replace("{node}", _ARTICLE_NODE))
+    metadata = extract_meta_json(html.fromstring(doc), Document())
+    assert (metadata.title, metadata.author) == ("Storm hits coast", "Jane Doe")
+
+
+def test_extract_json_schema_iri_types():
+    "Types written as schema.org IRIs are types: https://schema.org/NewsArticle is a NewsArticle."
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "https://schema.org/NewsArticle",
+        "headline": "Some Headline",
+        "author": {"@type": "http://schema.org/Person", "name": "Jane Doe"},
+    }
+    metadata = extract_json(schema, Document())
+    assert (metadata.title, metadata.author, metadata.pagetype) == ("Some Headline", "Jane Doe", "newsarticle")
+
+
+def test_extract_json_non_object_authors_and_sections():
+    "regression: a null author entry or a null articleSection must not lose the article's metadata."
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "Some Headline",
+        "author": [None, 7, {"@type": "Person", "name": "Jane Doe"}],
+        "articleSection": None,
+    }
+    metadata = extract_json(schema, Document())
+    assert (metadata.title, metadata.author, metadata.categories) == ("Some Headline", "Jane Doe", [])
+    schema["articleSection"] = ["Politics", None, {"name": "x"}, ""]
+    assert extract_json(schema, Document()).categories == ["Politics"]
+
+
 def test_extract_json_parse_error():
     "Crude-regex fallback for malformed JSON-LD extracts each field; comma-publisher is rejected."
     blob = (

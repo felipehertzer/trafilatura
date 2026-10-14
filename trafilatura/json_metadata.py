@@ -75,6 +75,7 @@ JSON_TYPE = re.compile(r'"@type"\s*:\s*"([^"]*)"', re.DOTALL)
 JSON_CATEGORY = re.compile(r'"articleSection": ?"([^"\\]+)', re.DOTALL)
 JSON_SCHEMA_ORG = re.compile(r"^https?://schema\.org", flags=re.IGNORECASE)
 JSON_UNICODE_REPLACE = re.compile(r"\\u([0-9a-fA-F]{4})")
+JSON_LONE_SURROGATE = re.compile("[\ud800-\udfff]")
 
 AUTHOR_ATTRS = ("givenName", "additionalName", "familyName")
 
@@ -115,28 +116,39 @@ def is_plausible_sitename(metadata: Document, candidate: Any, content_type: str 
     return False
 
 
+def json_objects(value: Any) -> list[dict[str, Any]]:
+    "The JSON-LD nodes of a value: nested node lists are flattened, nulls and scalars skipped."
+    objects: list[dict[str, Any]] = []
+    for item in as_list(value):
+        if isinstance(item, dict):
+            objects.append(item)
+        elif isinstance(item, list):
+            objects.extend(json_objects(item))
+    return objects
+
+
+def schema_types(value: Any) -> list[str]:
+    "Lower-cased schema.org types of a node, full IRIs (https://schema.org/NewsArticle) included."
+    return [kind.rsplit("/", 1)[-1].rsplit("#", 1)[-1].lower() for kind in as_list(value) if isinstance(kind, str) and kind]
+
+
 def process_parent(parent: Any, metadata: Document) -> Document:
     "Find and extract selected metadata from JSON parts."
-    content: dict[str, Any]
-    for content in filter(None, parent):
+    for content in json_objects(parent):
         # publisher may be a bare string, not a dict
         publisher = content.get("publisher")
         if isinstance(publisher, dict) and is_plausible_sitename(metadata, publisher.get("name")):
             metadata.sitename = publisher["name"]
 
-        if "@type" not in content or not content["@type"]:
+        content_types = schema_types(content.get("@type"))
+        if not content_types:
             continue
 
         # Prefer the first recognized type, preserving order among recognized types.
-        content_types = as_list(content["@type"])
         content_type = next(
-            (
-                schema_type
-                for schema_type in content_types
-                if isinstance(schema_type, str) and schema_type.lower() in JSON_SCHEMA_TYPES
-            ),
+            (schema_type for schema_type in content_types if schema_type in JSON_SCHEMA_TYPES),
             content_types[0],
-        ).lower()
+        )
 
         # The "pagetype" should only be returned if the page is some kind of an article, category, website...
         if content_type in JSON_OGTYPE_SCHEMA and not metadata.pagetype:
@@ -166,7 +178,9 @@ def process_parent(parent: Any, metadata: Document) -> Document:
                 for author in as_list(list_authors):
                     if isinstance(author, str):
                         author = {"name": author}
-                    if "@type" not in author or "Person" in as_list(author["@type"]):
+                    elif not isinstance(author, dict):
+                        continue
+                    if "@type" not in author or "person" in schema_types(author["@type"]):
                         author_name = None
                         # error thrown: author['name'] can be a list (?)
                         if "name" in author:
@@ -183,10 +197,8 @@ def process_parent(parent: Any, metadata: Document) -> Document:
 
             # category
             if not metadata.categories and "articleSection" in content:
-                if isinstance(content["articleSection"], str):
-                    metadata.categories = [content["articleSection"]]
-                else:
-                    metadata.categories = list(filter(None, content["articleSection"]))
+                sections = as_list(content["articleSection"])
+                metadata.categories = [section for section in sections if isinstance(section, str) and section]
 
             # try to extract title
             if not metadata.title:
@@ -209,7 +221,7 @@ def extract_json(schema: list[Any] | dict[str, str], metadata: Document) -> Docu
 
     # collect content from every valid block, then process once (no short-circuit on a flat object)
     parents: list[Any] = []
-    for parent in schema:
+    for parent in json_objects(schema):
         context = parent.get("@context")
 
         if context and isinstance(context, str) and JSON_SCHEMA_ORG.match(context):
@@ -282,6 +294,17 @@ def extract_json_parse_error(elem: str, metadata: Document) -> Document:
                 break
 
     return metadata
+
+
+def normalize_json_strings(value: Any) -> Any:
+    "Clean every string of decoded JSON as normalize_json cleans raw text: entities, markup, whitespace."
+    if isinstance(value, str):
+        return trim(HTML_STRIP_TAGS.sub("", unescape(JSON_LONE_SURROGATE.sub("", value))))
+    if isinstance(value, list):
+        return [normalize_json_strings(item) for item in value]
+    if isinstance(value, dict):
+        return {key: normalize_json_strings(item) for key, item in value.items()}
+    return value
 
 
 def normalize_json(string: str) -> str:
