@@ -204,6 +204,15 @@ def test_author_from_markup():
             f'{begin}<div class="group-author-inner">Von <a class="username">Isabella DiBiase</a> am <span class="date-display-single">Samstag, 19. Oktober 2019 um 11:14 Uhr</span></div>{end}',
             "Isabella DiBiase",
         ),
+        # a related-post card is not a byline, whatever its taxonomy classes say
+        (
+            f'{begin}<div class="e-loop-item post-69964 contents type-contents status-publish hentry author_tags-aya-turk"><h3><a href="/contents/quebec-and-atlantic-canada-mining-2026/">Québec and Atlantic Canada Mining 2026</a></h3></div>{end}',
+            None,
+        ),
+        (
+            f'{begin}<div class="post-1 type-post status-publish hentry author-jenny-smith"><span class="author vcard">Jenny Smith</span></div>{end}',
+            "Jenny Smith",
+        ),
         (f'{begin}<h3 itemprop="author">Jenny Smith</h3>{end}', "Jenny Smith"),
         (
             f'{begin}<div class="article-meta article-meta-byline article-meta-with-photo article-meta-author-and-reviewer" itemprop="author" itemscope="" itemtype="http://schema.org/Person"><span class="article-meta-photo-wrap"><img src="" alt="Jenny Smith" itemprop="image" class="article-meta-photo"></span><span class="article-meta-contents"><span class="article-meta-author">By <a href="" itemprop="url"><span itemprop="name">Jenny Smith</span></a></span><span class="article-meta-date">May 18 2022</span><span class="article-meta-reviewer">Reviewed by <a href="">Robert Smith</a></span></span></div>{end}',

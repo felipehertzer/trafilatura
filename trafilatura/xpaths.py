@@ -383,13 +383,16 @@ AUTHOR_XPATHS = [
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
-        # almost generic and generic, last ones not common
+        # almost generic and generic, last ones not common; a WordPress post
+        # container (hAtom "hentry", "status-publish") is never the byline, but
+        # its taxonomy classes can name authors ("author_tags-aya-turk")
         """
         //*[self::a or self::div or self::h3 or self::h4 or self::p or self::span][
         @class='byline' or @class='username' or @class='byl' or @class='BBL' or
         contains(@itemprop, 'author') or
         re:test(@id, 'author|zuozhe|bianji|xiaobian') or
         re:test(@class, 'author|channel-name|zuozhe|bianji|xiaobian|submitted-by|posted-by|journalist-name')]
+        [not(re:test(@class, '(?:^|\\s)(?:hentry|status-publish)(?:\\s|$)'))]
         """,
         namespaces={"re": REGEXP_NS},
     ),
@@ -400,6 +403,7 @@ AUTHOR_XPATHS = [
         contains(@data-component, 'Byline') or contains(@itemprop, 'author') or
         re:test(@id, '[Aa]uthor') or
         re:test(@class, '[Aa]uthor|screenname|writer|[Bb]yline')]
+        [not(re:test(@class, '(?:^|\\s)(?:hentry|status-publish)(?:\\s|$)'))]
         """,
         namespaces={"re": REGEXP_NS},
     ),
