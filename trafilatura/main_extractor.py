@@ -644,6 +644,46 @@ def prune_unwanted_sections(
     return tree
 
 
+def merge_split_body(subtree: HtmlElement, matches: list[HtmlElement]) -> HtmlElement:
+    """Append later matches of the same body expression that continue this body.
+
+    A CMS may split one article body across containers (article__body, then
+    article__body article__body--bottom around an ad or a widget), and the first match
+    alone keeps only the opening part. A later match continues it when it is in the
+    same article or main element, has the same tag, is not inside an aside, footer or
+    nav, and shares with the first one a class that marks only matching containers:
+    a utility class such as "relative", found on other elements too, proves nothing.
+    """
+    classes = set((subtree.get("class") or "").split())
+    scope = next((node for node in subtree.iterancestors() if node.tag in ("article", "main")), None)
+    if not classes or scope is None:
+        return subtree
+    order = {element: index for index, element in enumerate(scope.iter())}
+    matching = set(matches)
+    marking = {
+        token
+        for token in classes
+        if all(element in matching for element in order if token in (element.get("class") or "").split())
+    }
+    if not marking:
+        return subtree
+    for other in matches:
+        if (
+            other is subtree
+            or other.getparent() is None
+            or order.get(other, -1) < order[subtree]
+            or other.tag != subtree.tag
+            or not marking & set((other.get("class") or "").split())
+            or subtree in other.iterancestors()
+            or other in subtree.iterancestors()
+            or any(node.tag in ("aside", "footer", "nav") for node in other.iterancestors() if node in order)
+        ):
+            continue
+        for child in list(other):
+            subtree.append(child)
+    return subtree
+
+
 def _extract(tree: HtmlElement, options: Extractor) -> tuple[_Element, str, set[str]]:
     # init
     potential_tags = set(TAG_CATALOG)
@@ -657,9 +697,10 @@ def _extract(tree: HtmlElement, options: Extractor) -> tuple[_Element, str, set[
     # iterate
     for expr in BODY_XPATH:
         # select tree if the expression has been found
-        subtree = next((s for s in expr(tree) if s is not None), None)
-        if subtree is None:
+        matches = [s for s in expr(tree) if s is not None]
+        if not matches:
             continue
+        subtree = merge_split_body(matches[0], matches)
         # prune the subtree
         subtree = prune_unwanted_sections(subtree, potential_tags, options)
         # skip if empty tree

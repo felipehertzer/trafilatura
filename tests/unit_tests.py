@@ -4413,3 +4413,33 @@ def test_comment_widget_custom_elements(widget):
     text = extract(doc, include_comments=False)
     assert "new bridge" in text
     assert "display name" not in text
+
+
+def test_split_article_body_is_merged():
+    "A body split across containers keeps its later parts, but not lookalikes in a nav or sharing a utility class."
+    teaser = "<p>" + "The council approved the new bridge after a long debate about its cost. " * 6 + "</p>"
+    body = "".join(
+        "<p>" + f"Construction part {i} starts in spring and should finish within two years, officials said. " * 3 + "</p>"
+        for i in range(8)
+    )
+    related = "<p>" + "Related story text that belongs to another article entirely and must stay out. " * 4 + "</p>"
+    doc = (
+        "<html><body><article>"
+        f'<div class="article-content relative"><h2>Bridge approved</h2>{teaser}</div>'
+        f'<div class="row"><div class="span9"><div class="article-content">{body}</div></div></div>'
+        f'<nav><div class="article-content">{related}</div></nav>'
+        f'<ul><li><div class="teaser relative">{related}</div></li></ul>'
+        "</article></body></html>"
+    )
+    text = extract(doc, fast=True)
+    assert "new bridge" in text
+    assert "Construction part 7" in text
+    assert "another article" not in text
+    # the parts may differ in their other classes
+    doc = (
+        "<html><body><article>"
+        f'<section class="article__body full-content article__content">{teaser}</section><div class="ad">Ad</div>'
+        f'<div class="main"><section class="article__body article__body--bottom">{body}</section></div>'
+        "</article></body></html>"
+    )
+    assert "Construction part 7" in extract(doc, fast=True)
