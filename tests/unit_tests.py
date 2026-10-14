@@ -4458,3 +4458,19 @@ def test_fully_linked_paragraph_between_prose_is_kept():
     )
     assert "full report" in extract(f"<html><body><article>{prose}{linked}{prose}</article></body></html>", fast=True)
     assert "Read more" not in extract(f"<html><body><article>{prose}{prose}{teaser}</article></body></html>", fast=True)
+
+
+def test_infinite_scroll_keeps_only_the_article_with_the_headline():
+    "Articles appended beside the page's article in an infinite-scroll container are dropped."
+    current = "<p>" + "The council approved the new bridge after a long debate about its cost. " * 5 + "</p>"
+    appended = "<p>" + "We are thrilled to introduce a collection of city guides for dog lovers. " * 5 + "</p>"
+    doc = (
+        '<html><body><div class="container infinite-scroll">'
+        f"<article><h2>Earlier story</h2>{appended}</article>"
+        f"<article><h1>Bridge approved</h1>{current}</article>"
+        f"<article><h2>Later story</h2>{appended}</article>"
+        "</div></body></html>"
+    )
+    text = extract(doc, fast=True)
+    assert "new bridge" in text
+    assert "dog lovers" not in text

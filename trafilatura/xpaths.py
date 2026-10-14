@@ -196,6 +196,16 @@ RAW_TREE_PRUNE_XPATH = [
         """,
         namespaces={"re": REGEXP_NS},
     ),
+    # a container holding the h1 keeps the page's article, the one with the h1; the other
+    # articles beside it are appended ones
+    XPath(
+        """
+        .//*[self::div or self::section][
+        re:test(@id, 'infinite-?scroll') or re:test(@class, 'infinite-?scroll')][
+        article[.//h1]]/article[not(.//h1)]
+        """,
+        namespaces={"re": REGEXP_NS},
+    ),
     # OVERALL_DISCARD_XPATH's "share-" token matches these already, but its "widget" token
     # also matches the article body ("elementor-widget")
     XPath(".//*[self::div or self::section or self::aside][contains(@class, 'elementor-share-buttons')]"),
