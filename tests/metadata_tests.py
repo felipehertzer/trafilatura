@@ -553,6 +553,72 @@ def test_extract_json_non_object_authors_and_sections():
     assert extract_json(schema, Document()).categories == ["Politics"]
 
 
+@pytest.mark.parametrize(
+    ("payload", "head", "expected"),
+    [
+        # one article: its image, made absolute against the page URL
+        (
+            (
+                '{"@context": "https://schema.org", "@type": "NewsArticle", "url": "https://example.com/a?x=1", '
+                '"image": {"@type": "ImageObject", "url": "/img/a.jpg"}}'
+            ),
+            '<link rel="canonical" href="http://www.example.com/a/">',
+            "http://www.example.com/img/a.jpg",
+        ),
+        # Open Graph comes first
+        (
+            '{"@context": "https://schema.org", "@type": "NewsArticle", "image": "https://example.com/ld.jpg"}',
+            '<meta property="og:image" content="https://example.com/og.jpg">',
+            "https://example.com/og.jpg",
+        ),
+        # several articles: the one describing the page, whatever the scheme, www. or query
+        (
+            (
+                '{"@context": "https://schema.org", "@graph": ['
+                '{"@type": "NewsArticle", "url": "https://example.com/other", "image": "https://example.com/other.jpg"}, '
+                '{"@type": "NewsArticle", "mainEntityOfPage": {"@id": "https://example.com/a"}, '
+                '"thumbnailUrl": "https://example.com/a.jpg"}]}'
+            ),
+            '<link rel="canonical" href="https://www.example.com/a?utm_source=x">',
+            "https://example.com/a.jpg",
+        ),
+        # several articles and no page URL: no way to tell which, no image
+        (
+            (
+                '{"@context": "https://schema.org", "@graph": ['
+                '{"@type": "NewsArticle", "image": "https://example.com/1.jpg"}, '
+                '{"@type": "NewsArticle", "image": "https://example.com/2.jpg"}]}'
+            ),
+            "",
+            None,
+        ),
+        # an image given by reference
+        (
+            (
+                '{"@context": "https://schema.org", "@graph": ['
+                '{"@type": "ImageObject", "@id": "#img", "contentUrl": "https://example.com/ref.jpg"}, '
+                '{"@type": "Article", "image": {"@id": "#img"}}]}'
+            ),
+            '<link rel="canonical" href="https://example.com/a">',
+            "https://example.com/ref.jpg",
+        ),
+        # only article nodes: not a page image or a publisher logo
+        (
+            (
+                '{"@context": "https://schema.org", "@type": "WebPage", "image": "https://example.com/page.png", '
+                '"publisher": {"@type": "Organization", "logo": "https://example.com/logo.png"}}'
+            ),
+            "",
+            None,
+        ),
+    ],
+)
+def test_extract_json_image(payload, head, expected):
+    "The image of the page's JSON-LD article, when Open Graph and Twitter cards name none."
+    doc = f'<html><head>{head}<script type="application/ld+json">{payload}</script></head><body><p>x</p></body></html>'
+    assert extract_metadata(doc).image == expected
+
+
 def test_extract_json_parse_error():
     "Crude-regex fallback for malformed JSON-LD extracts each field; comma-publisher is rejected."
     blob = (

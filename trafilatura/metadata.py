@@ -487,6 +487,10 @@ def extract_metadata(
     if metadata.author and " " not in metadata.author:
         metadata.author = None
 
+    # url, before JSON-LD: it tells the page's own article node from listed ones
+    if not metadata.url:
+        metadata.url = extract_url(tree, default_url)
+
     # fix: try json-ld metadata and override
     try:
         metadata = extract_meta_json(tree, metadata)

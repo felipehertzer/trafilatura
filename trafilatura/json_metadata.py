@@ -9,6 +9,7 @@ import re
 from html import unescape
 from re import Pattern
 from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 from .settings import Document
 from .utils import HTML_STRIP_TAGS, as_list, trim
@@ -209,6 +210,47 @@ def process_parent(parent: Any, metadata: Document) -> Document:
     return metadata
 
 
+def _page_key(url: str) -> str:
+    "Host without www. and path without trailing slash: the same page across scheme, query and fragment."
+    parts = urlsplit(url)
+    return f"{parts.netloc.lower().removeprefix('www.')}{parts.path.rstrip('/')}"
+
+
+def _node_url(node: dict[str, Any]) -> str | None:
+    "The page a JSON-LD node describes."
+    for key in ("url", "mainEntityOfPage", "@id"):
+        value = node.get(key)
+        if isinstance(value, dict):
+            value = value.get("@id") or value.get("url")
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def extract_json_image(nodes: list[dict[str, Any]], page_url: str | None) -> str | None:
+    """The image of the page's article node (schema.org image or thumbnailUrl).
+
+    With several article nodes, only the one describing the page counts, so that the
+    image of a listed or related article is not taken for the page's.
+    """
+    articles = [node for node in nodes if JSON_ARTICLE_SCHEMA.intersection(schema_types(node.get("@type")))]
+    if len(articles) > 1:
+        if not page_url:
+            return None
+        page = _page_key(page_url)
+        articles = [node for node in articles if (url := _node_url(node)) and _page_key(urljoin(page_url, url)) == page]
+    references = {node["@id"]: node for node in nodes if isinstance(node.get("@id"), str)}
+    for article in articles:
+        for item in as_list(article.get("image") or article.get("thumbnailUrl")):
+            if isinstance(item, dict):
+                if not (item.get("url") or item.get("contentUrl")) and isinstance(item.get("@id"), str):
+                    item = references.get(item["@id"], item)
+                item = item.get("url") or item.get("contentUrl")
+            if isinstance(item, str) and item.strip():
+                return urljoin(page_url, item.strip()) if page_url else item.strip()
+    return None
+
+
 def extract_json(schema: list[Any] | dict[str, str], metadata: Document) -> Document:
     """Parse and extract metadata from JSON-LD data.
 
@@ -237,6 +279,8 @@ def extract_json(schema: list[Any] | dict[str, str], metadata: Document) -> Docu
             else:
                 parents.append(parent)
 
+    if not metadata.image:
+        metadata.image = extract_json_image(json_objects(parents), metadata.url)
     return process_parent(parents, metadata)
 
 
