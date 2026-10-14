@@ -4385,3 +4385,14 @@ def test_convert_tags_links_off_keeps_contained_links(options):
     options.tables = False
     converted = convert_tags(html.fromstring(doc), options)
     assert [ref.text for ref in converted.iter("ref")] == ["para"]
+
+
+def test_template_content_is_inert_unless_a_shadow_root():
+    "Template content is never rendered, except in a declarative shadow root."
+    paragraph = "<p>" + "The council approved the new bridge after a long debate about its cost. " * 5 + "</p>"
+    teaser = "<p>" + "Placeholder teaser text for the card. " * 6 + "</p>"
+    inert = f"<html><body><article>{paragraph}<template>{teaser}</template></article></body></html>"
+    assert "new bridge" in extract(inert)
+    assert "Placeholder" not in extract(inert)
+    shadow = f"<html><body><div><template shadowrootmode='open'><article>{paragraph}</article></template></div></body></html>"
+    assert "new bridge" in extract(shadow)

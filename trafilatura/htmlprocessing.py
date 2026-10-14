@@ -101,6 +101,11 @@ def tree_cleaning(tree: HtmlElement, options: Extractor) -> HtmlElement:
         cleaning_list = [e for e in cleaning_list if e not in PRESERVE_IMG_CLEANING]
         stripping_list.remove("img")
 
+    # template content is inert, except a declarative shadow root, which is rendered
+    for template in list(tree.iter("template")):
+        if not (template.get("shadowrootmode") or template.get("shadowroot")):
+            delete_element(template)
+
     # strip targeted elements
     strip_tags(tree, stripping_list)
 
