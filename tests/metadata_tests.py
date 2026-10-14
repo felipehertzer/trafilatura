@@ -730,6 +730,26 @@ def test_extract_json_image(payload, head, expected):
     assert extract_metadata(doc).image == expected
 
 
+@pytest.mark.parametrize(
+    ("meta", "person", "expected"),
+    [
+        # a brand in the meta byline gives way to the JSON-LD person
+        ('<meta name="author" content="Prisma Média">', "Marie Merlet", "Marie Merlet"),
+        # a meta byline naming that person is fuller: its other names are co-authors
+        ('<meta name="author" content="Thomas Grove, Daria Matviichuk">', "Thomas Grove", "Thomas Grove; Daria Matviichuk"),
+        # either source alone
+        ('<meta name="author" content="Jane Doe">', None, "Jane Doe"),
+        ("", "Jane Doe", "Jane Doe"),
+    ],
+)
+def test_json_ld_person_comes_before_meta_byline(meta, person, expected):
+    "JSON-LD Person authors come before meta bylines, which often name the brand."
+    author = f', "author": {{"@type": "Person", "name": "{person}"}}' if person else ""
+    payload = f'{{"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Some Headline"{author}}}'
+    doc = f'<html><head>{meta}<script type="application/ld+json">{payload}</script></head><body></body></html>'
+    assert extract_metadata(doc).author == expected
+
+
 def test_extract_json_parse_error():
     "Crude-regex fallback for malformed JSON-LD extracts each field; comma-publisher is rejected."
     blob = (

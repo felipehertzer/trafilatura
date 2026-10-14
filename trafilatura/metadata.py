@@ -24,6 +24,7 @@ from .htmlprocessing import prune_unwanted_nodes
 from .json_metadata import (
     extract_json,
     extract_json_parse_error,
+    name_key,
     normalize_authors,
     normalize_json,
     normalize_json_strings,
@@ -165,6 +166,31 @@ def check_authors(authors: str, author_blacklist: set[str]) -> str | None:
     if new_authors:
         return "; ".join(new_authors).strip("; ")
     return None
+
+
+def meta_author_bylines(tree: HtmlElement) -> list[list[str]]:
+    "The names of each author meta tag, one list per tag."
+    bylines = []
+    for elem in tree.xpath(".//head/meta[@content]"):
+        key = (elem.get("property") or elem.get("name") or elem.get("itemprop") or "").lower()
+        if (key in METANAME_AUTHOR or key in PROPERTY_AUTHOR) and (names := normalize_authors(None, elem.get("content", ""))):
+            bylines.append(names.split("; "))
+    return bylines
+
+
+def merge_meta_authors(tree: HtmlElement, meta_author: str | None, json_author: str | None) -> str | None:
+    """JSON-LD Person authors come before meta bylines, which often name the brand
+    ("Prisma Média; Marie Merlet"). A meta byline that also names one of those persons
+    is a fuller byline, and its other names are co-authors."""
+    if not json_author:
+        return meta_author
+    if meta_author:
+        persons = {name_key(name) for name in json_author.split("; ")}
+        for byline in meta_author_bylines(tree):
+            if len(byline) > 1 and any(name_key(name) in persons for name in byline):
+                for name in byline:
+                    json_author = normalize_authors(json_author, name)
+    return json_author
 
 
 def extract_meta_json(tree: HtmlElement, metadata: Document) -> Document:
@@ -516,10 +542,12 @@ def extract_metadata(
         metadata.url = extract_url(tree, default_url)
 
     # fix: try json-ld metadata and override
+    meta_author, metadata.author = metadata.author, None
     try:
         metadata = extract_meta_json(tree, metadata)
     except Exception as err:  # bugs in json_metadata.py
         LOGGER.warning("error in JSON metadata extraction: %s", err)
+    metadata.author = merge_meta_authors(tree, meta_author, metadata.author)
 
     # title
     if not metadata.title:

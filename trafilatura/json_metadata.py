@@ -361,7 +361,7 @@ def normalize_json(string: str) -> str:
     return trim(HTML_STRIP_TAGS.sub("", string))
 
 
-def _name_key(name: str) -> str:
+def name_key(name: str) -> str:
     "A name's letters, case-folded."
     return "".join(char for char in name.casefold() if char.isalpha())
 
@@ -407,7 +407,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         if not author[0].isupper():
             author = author.title()
         # one person however the name is spelled (apostrophes, spaces, case): Ben Grubb / Bengrubb
-        if all(_name_key(author) != _name_key(name) for name in new_authors):
+        if all(name_key(author) != name_key(name) for name in new_authors):
             new_authors.append(author)
     # keep only the fullest form of each name (drop names contained in another)
     new_authors = [n for n in new_authors if not any(n != m and n in m for m in new_authors)]
