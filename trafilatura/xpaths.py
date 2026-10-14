@@ -426,7 +426,8 @@ AUTHOR_DISCARD_XPATHS = [
         """,
         namespaces={"re": REGEXP_NS},
     ),
-    XPath("//time|//figure"),
+    # script, style and template text is never rendered, noscript only without scripts
+    XPath("//time|//figure|//script|//style|//noscript|//template"),
 ]
 
 

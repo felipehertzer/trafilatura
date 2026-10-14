@@ -228,6 +228,23 @@ def test_author_from_markup():
         assert extract_metadata(doc).author == expected
 
 
+def _byline_page(body: str) -> str:
+    return f"<html><body><article><h1>Headline here</h1>{body}<p>{'Text. ' * 40}</p></article></body></html>"
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ('<div class="byline">By Jane Smith<script>var news_msid = 1;</script></div>', "Jane Smith"),
+        ('<div class="byline">By Jane Smith<style>.byline{display:block}</style></div>', "Jane Smith"),
+        ('<div class="byline">By Jane Smith<noscript>Please enable JavaScript</noscript></div>', "Jane Smith"),
+    ],
+)
+def test_author_ignores_unrendered_text(body, expected):
+    "Script, style, noscript and template text is no part of a byline."
+    assert extract_metadata(_byline_page(body)).author == expected
+
+
 def test_url():
     """Test URL extraction"""
     expected = "https://example.org"
