@@ -276,6 +276,12 @@ def test_author_ignores_unrendered_text(body, expected):
             "Jane Smith",
         ),
         ('<div class="author-box"><h4>Jenny Smith</h4></div>', "Jenny Smith"),
+        # "author" inside another word is no author: a paywall excerpt is no byline
+        (
+            '<div class="mepr-unauthorized-excerpt"><p>Eyre Peninsula was proudly represented by 30 players</p></div>',
+            None,
+        ),
+        ('<span class="postAuthor">Jenny Smith</span>', "Jenny Smith"),
         # an author-page link outside an author or byline container does not count
         (
             '<div class="byline">By Jane Smith</div><footer><a href="/authors/apply">Write for us</a></footer>',

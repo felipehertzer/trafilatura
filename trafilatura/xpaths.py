@@ -407,7 +407,7 @@ AUTHOR_XPATHS = [
         @class='byline' or @class='username' or @class='byl' or @class='BBL' or
         contains(@itemprop, 'author') or
         re:test(@id, 'author|zuozhe|bianji|xiaobian') or
-        re:test(@class, 'author|channel-name|zuozhe|bianji|xiaobian|submitted-by|posted-by|journalist-name')]
+        re:test(@class, '(?<![a-z])author|channel-name|zuozhe|bianji|xiaobian|submitted-by|posted-by|journalist-name')]
         [not(.//*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6]//a)]
         """,
         namespaces={"re": REGEXP_NS},
@@ -418,7 +418,7 @@ AUTHOR_XPATHS = [
         //*[
         contains(@data-component, 'Byline') or contains(@itemprop, 'author') or
         re:test(@id, '[Aa]uthor') or
-        re:test(@class, '[Aa]uthor|screenname|writer|[Bb]yline')]
+        re:test(@class, '(?<![a-z])author|Author|screenname|writer|[Bb]yline')]
         [not(.//*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6]//a)]
         """,
         namespaces={"re": REGEXP_NS},
