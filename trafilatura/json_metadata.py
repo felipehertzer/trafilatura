@@ -133,6 +133,17 @@ def schema_types(value: Any) -> list[str]:
     return [kind.rsplit("/", 1)[-1].rsplit("#", 1)[-1].lower() for kind in as_list(value) if isinstance(kind, str) and kind]
 
 
+TITLE_BRANDING_SEPARATORS = frozenset("|-–—·•")
+
+
+def is_branded_headline(title: str, headline: str) -> bool:
+    "Whether a meta title is this headline followed by a separated suffix."
+    title, headline = " ".join(unescape(title).split()), " ".join(unescape(headline).split())
+    if not headline or title == headline or not title.startswith(headline):
+        return False
+    return title[len(headline) :].lstrip()[:1] in TITLE_BRANDING_SEPARATORS
+
+
 def process_parent(parent: Any, metadata: Document) -> Document:
     "Find and extract selected metadata from JSON parts."
     for content in json_objects(parent):
@@ -201,12 +212,16 @@ def process_parent(parent: Any, metadata: Document) -> Document:
                 sections = as_list(content["articleSection"])
                 metadata.categories = [section for section in sections if isinstance(section, str) and section]
 
-            # try to extract title
+            # try to extract title; the article's headline also replaces a meta title
+            # that is this headline followed by branding ("Headline | Site")
+            headline = content.get("headline")
             if not metadata.title:
                 if "name" in content and content_type == "article":
                     metadata.title = content["name"]
                 elif "headline" in content:
-                    metadata.title = content["headline"]
+                    metadata.title = headline
+            elif isinstance(headline, str) and is_branded_headline(metadata.title, headline):
+                metadata.title = headline
     return metadata
 
 

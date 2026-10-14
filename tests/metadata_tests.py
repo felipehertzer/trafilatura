@@ -838,6 +838,30 @@ def test_title_site_suffix(head, body, url, expected):
     assert extract_metadata(doc, default_url=url).title == expected
 
 
+@pytest.mark.parametrize(
+    ("meta_title", "headline", "expected"),
+    [
+        ("Hope! - bewusster leben", "Hope!", "Hope!"),
+        ("A title | Some Section | Some Brand", "A title", "A title"),
+        # a colon starts a subtitle, not branding
+        (
+            "Coinbase vs. Coinbase Pro: How do they compare?",
+            "Coinbase vs. Coinbase Pro",
+            ("Coinbase vs. Coinbase Pro: How do they compare?"),
+        ),
+        ("Unrelated meta title here", "Another headline", "Unrelated meta title here"),
+    ],
+)
+def test_json_ld_headline_replaces_branded_title(meta_title, headline, expected):
+    "The JSON-LD headline replaces a meta title that is this headline followed by branding."
+    payload = f'{{"@context": "https://schema.org", "@type": "NewsArticle", "headline": "{headline}"}}'
+    doc = (
+        f'<html><head><meta property="og:title" content="{meta_title}">'
+        f'<script type="application/ld+json">{payload}</script></head><body></body></html>'
+    )
+    assert extract_metadata(doc).title == expected
+
+
 def test_extract_json_parse_error():
     "Crude-regex fallback for malformed JSON-LD extracts each field; comma-publisher is rejected."
     blob = (
