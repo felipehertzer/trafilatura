@@ -348,6 +348,23 @@ def examine_title_element(
     return title, None, None
 
 
+def restore_quote_truncated_title(tree: HtmlElement, title: str) -> str:
+    """Use <title> when an unescaped quote cut a meta title short.
+
+    content="He was "pulled from rubble"" ends the attribute at the inner quote, and the
+    rest of the headline turns into stray attributes (pulled="", rubble"=""): their names
+    hold the quote. The <title> element still holds the complete headline.
+    """
+    if not any('"' in name or "'" in name for meta in tree.iterfind(".//head/meta") for name in meta.attrib):
+        return title
+    head = " ".join(title.split())
+    for element in tree.iterfind(".//head/title"):
+        full = " ".join(element.text_content().split())
+        if len(head) >= 3 and full.startswith(head) and full[len(head) :].lstrip()[:1] in "\"'":
+            return full
+    return title
+
+
 def extract_title(tree: HtmlElement) -> str | None:
     """Extract the document title"""
     # only one h1-element: take it
@@ -552,6 +569,8 @@ def extract_metadata(
     # title
     if not metadata.title:
         metadata.title = extract_title(tree)
+    else:
+        metadata.title = restore_quote_truncated_title(tree, metadata.title)
 
     # check author in blacklist
     if metadata.author and author_blacklist:

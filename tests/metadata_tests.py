@@ -750,6 +750,18 @@ def test_json_ld_person_comes_before_meta_byline(meta, person, expected):
     assert extract_metadata(doc).author == expected
 
 
+def test_title_cut_by_unescaped_quote():
+    "An unescaped quote ends a meta title early; the <title> element still holds the headline."
+    broken = '<meta property="og:title" content="He was "pulled from rubble" after the quake">'
+    title = '<title>He was "pulled from rubble" after the quake</title>'
+    doc = f"<html><head>{broken}{title}</head><body></body></html>"
+    assert extract_metadata(doc).title == 'He was "pulled from rubble" after the quake'
+    # an intact meta title is kept, whatever <title> says
+    intact = '<meta property="og:title" content="Plain headline about rivers">'
+    other = '<title>Plain headline about rivers "quoted" extra</title>'
+    assert extract_metadata(f"<html><head>{intact}{other}</head><body></body></html>").title == ("Plain headline about rivers")
+
+
 def test_extract_json_parse_error():
     "Crude-regex fallback for malformed JSON-LD extracts each field; comma-publisher is rejected."
     blob = (
