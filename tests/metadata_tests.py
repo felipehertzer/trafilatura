@@ -990,3 +990,36 @@ def test_author_discard_markers(marker):
 def test_byline_timestamps(byline, expected):
     "A timestamp in the byline is no name, nor is the preposition before it."
     assert extract_metadata(f"<html><body>{byline}</body></html>").author == expected
+
+
+@pytest.mark.parametrize(
+    ("post", "expected"),
+    [
+        # a related-post card, its taxonomy classes name an author term
+        (
+            (
+                '<div class="e-loop-item post-42 type-post status-publish hentry author_tags-jane-roe">'
+                '<h3><a href="/2026/mining-in-the-north/">Mining in the north 2026</a></h3></div>'
+            ),
+            None,
+        ),
+        (
+            (
+                '<article class="post-42 post type-post hentry author_tags-jane-roe">'
+                '<h2><a href="/2026/mining-in-the-north/">Mining in the north</a></h2></article>'
+            ),
+            None,
+        ),
+        # a byline inside the post container is still found
+        (
+            (
+                '<div class="post-1 type-post status-publish hentry author-jenny-smith">'
+                '<span class="author vcard">Jenny Smith</span></div>'
+            ),
+            "Jenny Smith",
+        ),
+    ],
+)
+def test_byline_not_read_from_post_container(post, expected):
+    "A post container is never the byline, whatever its taxonomy classes say."
+    assert extract_metadata(f"<html><body>{post}</body></html>").author == expected
