@@ -175,6 +175,15 @@ def is_paragraph_listing(links_xpath: list[HtmlElement]) -> bool:
     return True
 
 
+def is_prose(element: HtmlElement | None) -> bool:
+    "A paragraph of running text: some length, mostly not link text."
+    if element is None or element.tag != "p":
+        return False
+    text = trim(element.text_content())
+    linked = sum(len(trim(link.text_content())) for link in element.iter("ref"))
+    return len(text) >= 40 and linked < len(text) / 2
+
+
 def link_density_test(element: HtmlElement, favor_precision: bool = False) -> tuple[bool, bool]:
     "Remove sections which are rich in links (probably boilerplate), flag short linked ones."
     links_xpath = element.findall(".//ref")
@@ -185,7 +194,8 @@ def link_density_test(element: HtmlElement, favor_precision: bool = False) -> tu
         return False, False
     text = trim(element.text_content())
     # shortcut
-    if len(links_xpath) == 1:
+    # a paragraph between two prose paragraphs is prose, even when a single link spans it
+    if len(links_xpath) == 1 and not (element.tag == "p" and is_prose(element.getprevious()) and is_prose(element.getnext())):
         len_threshold = 10 if favor_precision else 100
         link_text = trim(links_xpath[0].text_content())
         if len(link_text) > len_threshold and len(link_text) > len(text) * 0.9:

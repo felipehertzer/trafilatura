@@ -4443,3 +4443,18 @@ def test_split_article_body_is_merged():
         "</article></body></html>"
     )
     assert "Construction part 7" in extract(doc, fast=True)
+
+
+def test_fully_linked_paragraph_between_prose_is_kept():
+    "One link spanning a paragraph is prose between prose paragraphs, and a teaser after them."
+    prose = "<p>" + "The council approved the new bridge after a long debate about its cost and its route. " * 3 + "</p>"
+    linked = (
+        "<p><a href='https://example.org/report'>The full report found that the bridge would cut travel times "
+        "across the river by almost half for commuters.</a></p>"
+    )
+    teaser = (
+        "<p><a href='https://example.org/other'>Read more: police say a man has been charged after a crash on the "
+        "highway overnight in the city centre.</a></p>"
+    )
+    assert "full report" in extract(f"<html><body><article>{prose}{linked}{prose}</article></body></html>", fast=True)
+    assert "Read more" not in extract(f"<html><body><article>{prose}{prose}{teaser}</article></body></html>", fast=True)
