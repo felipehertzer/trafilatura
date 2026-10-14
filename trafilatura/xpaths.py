@@ -151,6 +151,11 @@ COMMENTS_XPATH = [
 
 _COMMENTS_ID = "[Cc]omment(?!ary)|comol"
 _COMMENTS_CLASS = "^[Cc]omment(?!ary)|(?:article|post)-comments"
+# comment widgets as custom elements, whose names hold a hyphen: <vf-conversations>, <coral-comments>
+COMMENT_WIDGET_XPATH = XPath(
+    ".//*[contains(local-name(), '-') and re:test(local-name(), '(?:^|-)(?:comments?|conversations?)(?:-|$)')]",
+    namespaces={"re": REGEXP_NS},
+)
 REMOVE_COMMENTS_XPATH = [
     XPath(
         f"""
@@ -159,7 +164,8 @@ REMOVE_COMMENTS_XPATH = [
         re:test(@class, '{_COMMENTS_CLASS}')]
         """,
         namespaces={"re": REGEXP_NS},
-    )
+    ),
+    COMMENT_WIDGET_XPATH,
 ]
 # plus ol/ul comment lists, without the disqus ids, in one tree walk
 REMOVE_COMMENTS_AND_LISTS_XPATH = [
@@ -171,7 +177,8 @@ REMOVE_COMMENTS_AND_LISTS_XPATH = [
         not(self::ol or self::ul) or re:test(@id, '^(?:{_COMMENTS_ID})') or re:test(@class, '{_COMMENTS_CLASS}')]
         """,
         namespaces={"re": REGEXP_NS},
-    )
+    ),
+    COMMENT_WIDGET_XPATH,
 ]
 # or self::span
 # or contains(@class, 'comment') or contains(@id, 'comment')

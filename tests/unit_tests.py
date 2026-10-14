@@ -4396,3 +4396,20 @@ def test_template_content_is_inert_unless_a_shadow_root():
     assert "Placeholder" not in extract(inert)
     shadow = f"<html><body><div><template shadowrootmode='open'><article>{paragraph}</article></template></div></body></html>"
     assert "new bridge" in extract(shadow)
+
+
+@pytest.mark.parametrize(
+    "widget",
+    [
+        "<vf-conversations><p>You must confirm your public display name before commenting here.</p></vf-conversations>",
+        "<coral-comments><p>You must confirm your public display name before commenting here.</p></coral-comments>",
+        "<comment-section><p>You must confirm your public display name before commenting here.</p></comment-section>",
+    ],
+)
+def test_comment_widget_custom_elements(widget):
+    "Comment widgets built as custom elements go with the comments, and only with them."
+    paragraph = "<p>" + "The council approved the new bridge after a long debate about its cost. " * 5 + "</p>"
+    doc = f"<html><body><div class='article-viafoura'><article>{paragraph}{widget}</article></div></body></html>"
+    text = extract(doc, include_comments=False)
+    assert "new bridge" in text
+    assert "display name" not in text
