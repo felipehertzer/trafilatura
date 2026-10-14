@@ -33,6 +33,7 @@ from .utils import HTML_STRIP_TAGS, line_processing, load_html, safe_base_url, t
 from .xpaths import (
     AUTHOR_DISCARD_XPATHS,
     AUTHOR_XPATHS,
+    BYLINE_TIMESTAMP_XPATH,
     CATEGORIES_XPATHS,
     TAGS_XPATHS,
     TITLE_XPATHS,
@@ -348,14 +349,37 @@ def extract_title(tree: HtmlElement) -> str | None:
     return title or None
 
 
+BYLINE_LEAD_IN = re.compile(r"\s+([^\W\d_]+)\s*$")
+
+
+def drop_byline_timestamp(element: HtmlElement) -> None:
+    "Remove a timestamp from a byline, with the lower-case word leading into it (on, am, le, il)."
+    previous, parent = element.getprevious(), element.getparent()
+    if parent is None:
+        return
+    before = previous.tail if previous is not None else parent.text
+    if before and (match := BYLINE_LEAD_IN.search(before)) and match[1].islower():
+        before = before[: match.start()] + " "
+        if previous is not None:
+            previous.tail = before
+        else:
+            parent.text = before
+    element.drop_tree()
+
+
 def extract_author(tree: HtmlElement) -> str | None:
     """Extract the document author(s)"""
     subtree = prune_unwanted_nodes(deepcopy(tree), AUTHOR_DISCARD_XPATHS)
-    author = extract_metainfo(subtree, AUTHOR_XPATHS, len_limit=120)
-    if author:
-        author = normalize_authors(None, author)
-    # copyright?
-    return author
+    for expression in AUTHOR_XPATHS:
+        for elem in expression(subtree):
+            byline = deepcopy(elem)
+            for timestamp in BYLINE_TIMESTAMP_XPATH(byline):
+                drop_byline_timestamp(timestamp)
+            content = trim(" ".join(byline.itertext()))
+            if content and 2 < len(content) < 120:
+                # copyright?
+                return normalize_authors(None, content)
+    return None
 
 
 def extract_url(tree: HtmlElement, default_url: str | None = None) -> str | None:

@@ -288,6 +288,57 @@ def test_author_cards_and_author_links(body, expected):
     assert extract_metadata(_byline_page(body)).author == expected
 
 
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        # AP before a reporter is credited: the byline holds only its timestamp
+        (
+            (
+                '<div class="Page-byline"><div class="Page-dateModified">'
+                '<bsp-timestamp data-timestamp="1791261269000"><span data-date="">'
+                "Updated 3:34 PM AEDT, October 6, 2026</span></bsp-timestamp></div></div>"
+            ),
+            None,
+        ),
+        (
+            (
+                '<div class="Page-byline"><div class="Page-authors"> By <a class="Link" href="/author/jim">'
+                'Jim Salter</a></div><div class="Page-dateModified"><bsp-timestamp data-timestamp="1791261269000">'
+                '<span data-date="">Updated 3:34 PM AEDT, October 6, 2026</span></bsp-timestamp></div></div>'
+            ),
+            "Jim Salter",
+        ),
+        # the timestamp goes with the lower-case word leading into it
+        ('<div class="byline">By Jenny Smith on <span class="date">May 5, 2022</span></div>', "Jenny Smith"),
+        ('<div class="byline">Par Jean Dupont le <time datetime="2026-05-05">5 mai 2026</time></div>', "Jean Dupont"),
+        (
+            (
+                '<div class="group-author-inner">Von <a class="username">Isabella DiBiase</a> am '
+                '<span class="date-display-single">Samstag, 19. Oktober 2019 um 11:14 Uhr</span></div>'
+            ),
+            "Isabella DiBiase",
+        ),
+        # a dated container still yields its byline, and a date element holding the author stays
+        ('<div class="story-meta" data-date="2026-10-06"><span class="writer">Jenny Smith</span></div>', "Jenny Smith"),
+        ('<div class="byl" data-timestamp="1791261269000">By Jenny Smith</div>', "Jenny Smith"),
+        ('<p class="date-author">Janic Cathomen, 01.12.2021</p>', "Janic Cathomen"),
+        # a time element is a timestamp whatever its class says
+        (
+            (
+                '<div class="authorbox">By <a href="/author/geoff" itemprop="name">Geoff Adams</a>'
+                '<time class="authorbox__datetime" datetime="2026-10-14T13:49:00+11:00">Oct 14, 2026</time></div>'
+            ),
+            "Geoff Adams",
+        ),
+        # no global word rule: a name ending in a particle-like word is kept
+        ('<div class="byline">kim le</div>', "Kim Le"),
+    ],
+)
+def test_author_drops_byline_timestamps(body, expected):
+    "Timestamps inside the chosen byline are no names; the byline around them stays."
+    assert extract_metadata(_byline_page(body)).author == expected
+
+
 def test_url():
     """Test URL extraction"""
     expected = "https://example.org"

@@ -419,19 +419,33 @@ AUTHOR_XPATHS = [
 ]
 
 
+# timestamps inside a chosen byline: "Updated 3:34 PM AEDT, October 6, 2026" is no name;
+# time, datetime and schema.org dates always are, while one found by its data attributes or
+# class stays when it is or holds the author ("date-author": "Janic Cathomen, 01.12.2021")
+BYLINE_TIMESTAMP_XPATH = XPath(
+    """
+    ./descendant::*[self::time or @datetime or starts-with(@itemprop, 'date')] |
+    ./descendant::*[@data-timestamp or @data-date or @data-datetime or contains(local-name(), 'timestamp') or
+    re:test(@class, '(?:^|[\\s_-])(?:[Dd]ate|[Tt]imestamp|[Pp]ubdate)(?:[A-Z\\s_-]|$)')]
+    [not(descendant-or-self::*[re:test(@class, '[Aa]uthor|[Bb]yline') or @rel='author' or @itemprop='author'])]
+    """,
+    namespaces={"re": REGEXP_NS},
+)
+
 AUTHOR_DISCARD_XPATHS = [
     XPath(
         """
         .//*[self::a or self::div or self::section or self::span][
-        @id='comments' or @class='comments' or @class='title' or @class='date' or
+        @id='comments' or @class='comments' or @class='title' or
         re:test(@id, '^comments|comment-?list|ProductReviews') or
         re:test(@class, '^[Cc]omments|commentlist|comments-list|sidebar|is-hidden|quote|embedly-instagram|article-(?:share|support)|print|category|meta-date|meta-reviewer') or
         contains(@data-component, 'Figure')]
         """,
         namespaces={"re": REGEXP_NS},
     ),
-    # script, style and template text is never rendered, noscript only without scripts
-    XPath("//time|//figure|//script|//style|//noscript|//template"),
+    # script, style and template text is never rendered, noscript only without scripts;
+    # timestamps go per byline (BYLINE_TIMESTAMP_XPATH), with the word leading into them
+    XPath("//figure|//script|//style|//noscript|//template"),
 ]
 
 
