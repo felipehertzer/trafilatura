@@ -1102,10 +1102,27 @@ def test_normalize_authors():
     assert normalize_authors(None, "John Doe* ") == "John Doe"
     assert normalize_authors(None, "John Doe of John Doe") == "John Doe"
     assert normalize_authors(None, "John Doe — John Doe") == "John Doe"
-    assert normalize_authors(None, 'John "The King" Doe') == "John  Doe"
+    assert normalize_authors(None, 'John "The King" Doe') == "John Doe"
     # dedup keeps the fullest form regardless of order
     assert normalize_authors("Smith", "John Smith") == "John Smith"
     assert normalize_authors("John Smith", "Smith") == "John Smith"
+
+
+def test_normalize_authors_spelling_and_separators():
+    "Wire prefixes, typographic separators and quotes, and one entry per person however spelled."
+    assert normalize_authors(None, "Por Noah Trister") == "Noah Trister"
+    assert normalize_authors(None, "par Attac France") == "Attac France"
+    assert normalize_authors(None, "door Jan Jansen") == "Jan Jansen"
+    assert normalize_authors(None, "Jane Doe · John Smith") == "Jane Doe; John Smith"
+    assert normalize_authors(None, "Jane Doe • John Smith") == "Jane Doe; John Smith"
+    assert normalize_authors(None, "Jane “JD” Doe") == "Jane Doe"
+    assert normalize_authors(None, 'Jane "JD" Doe') == "Jane Doe"
+    assert normalize_authors(None, "Ben Grubb; Bengrubb") == "Ben Grubb"
+    assert normalize_authors(None, "Stephen O’Neil; Stephen O'Neil") == "Stephen O’Neil"
+    assert normalize_authors("Stephen O'Neil", "Stephen O’Neil") == "Stephen O'Neil"
+    # particles and lower-case names are untouched
+    assert normalize_authors(None, "Alexa von Heyden") == "Alexa von Heyden"
+    assert normalize_authors(None, "kim le") == "Kim Le"
 
 
 def test_normalize_json():

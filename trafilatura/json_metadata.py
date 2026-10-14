@@ -84,15 +84,15 @@ JSON_NAME = re.compile(r'"@type":"[Aa]rticle", ?"name": ?"([^"\\]+)', re.DOTALL)
 JSON_HEADLINE = re.compile(r'"headline": ?"([^"\\]+)', re.DOTALL)
 JSON_SEQ = [('"name"', JSON_NAME), ('"headline"', JSON_HEADLINE)]
 
-AUTHOR_PREFIX = re.compile(r"^([a-zäöüß]+(ed|t))? ?(written by|words by|words|by|von|from) ", flags=re.IGNORECASE)
+AUTHOR_PREFIX = re.compile(r"^([a-zäöüß]+(ed|t))? ?(written by|words by|words|by|von|from|por|par|door) ", flags=re.IGNORECASE)
 AUTHOR_REMOVE_NUMBERS = re.compile(r"\d.+?$")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
 AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
-AUTHOR_REMOVE_NICKNAME = re.compile(r'["‘({\[’\'][^"]+?[‘’"\')\]}]')
+AUTHOR_REMOVE_NICKNAME = re.compile(r'["“‘({\[’\'][^"”]+?[‘’"”\')\]}]')
 AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|·|•|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -361,6 +361,11 @@ def normalize_json(string: str) -> str:
     return trim(HTML_STRIP_TAGS.sub("", string))
 
 
+def _name_key(name: str) -> str:
+    "A name's letters, case-folded."
+    return "".join(char for char in name.casefold() if char.isalpha())
+
+
 def normalize_authors(current_authors: str | None, author_string: str) -> str | None:
     """Normalize author info to focus on author names only"""
     new_authors = []
@@ -388,7 +393,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_TWITTER.sub("", author)
         # replace special characters with space
         author = trim(AUTHOR_REPLACE_JOIN.sub(" ", author))
-        author = AUTHOR_REMOVE_NICKNAME.sub("", author)
+        author = trim(AUTHOR_REMOVE_NICKNAME.sub("", author))
         # remove special characters
         author = AUTHOR_REMOVE_SPECIAL.sub("", author)
         author = AUTHOR_PREFIX.sub("", author)
@@ -401,7 +406,8 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         # title case
         if not author[0].isupper():
             author = author.title()
-        if author not in new_authors:
+        # one person however the name is spelled (apostrophes, spaces, case): Ben Grubb / Bengrubb
+        if all(_name_key(author) != _name_key(name) for name in new_authors):
             new_authors.append(author)
     # keep only the fullest form of each name (drop names contained in another)
     new_authors = [n for n in new_authors if not any(n != m and n in m for m in new_authors)]
