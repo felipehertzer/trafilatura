@@ -387,18 +387,21 @@ AUTHOR_XPATHS = [
         //*[self::a or self::address or self::div or self::link or self::p or self::span or self::strong][
         @rel='author' or @id='author' or @class='author' or @itemprop='author name' or rel='me' or
         @data-testid='AuthorCard' or @data-testid='AuthorURL' or
+        (self::a and re:test(@href, '/authors?/') and ancestor::*[re:test(@class, '[Aa]uthor|[Bb]yline')]) or
         re:test(@class, 'author-?name|AuthorName|authorName')]|//author
         """,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
-        # almost generic and generic, last ones not common
+        # almost generic and generic, last ones not common; a candidate holding a linked
+        # heading is a teaser or related-post card, whose classes may name authors
         """
         //*[self::a or self::div or self::h3 or self::h4 or self::p or self::span][
         @class='byline' or @class='username' or @class='byl' or @class='BBL' or
         contains(@itemprop, 'author') or
         re:test(@id, 'author|zuozhe|bianji|xiaobian') or
         re:test(@class, 'author|channel-name|zuozhe|bianji|xiaobian|submitted-by|posted-by|journalist-name')]
+        [not(.//*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6]//a)]
         """,
         namespaces={"re": REGEXP_NS},
     ),
@@ -409,6 +412,7 @@ AUTHOR_XPATHS = [
         contains(@data-component, 'Byline') or contains(@itemprop, 'author') or
         re:test(@id, '[Aa]uthor') or
         re:test(@class, '[Aa]uthor|screenname|writer|[Bb]yline')]
+        [not(.//*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6]//a)]
         """,
         namespaces={"re": REGEXP_NS},
     ),

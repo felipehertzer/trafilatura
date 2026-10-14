@@ -245,6 +245,49 @@ def test_author_ignores_unrendered_text(body, expected):
     assert extract_metadata(_byline_page(body)).author == expected
 
 
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        # a related-post card names its own authors in its classes, its title is no byline
+        (
+            (
+                '<div class="post-1 type-post status-publish hentry author_tags-aya-turk">'
+                '<h3><a href="/contents/q">Québec and Atlantic Canada Mining 2026</a></h3></div>'
+            ),
+            None,
+        ),
+        (
+            (
+                '<div class="card tags-author-aya-turk">'
+                '<h3><a href="/c/q">Québec and Atlantic Canada Mining 2026</a></h3></div>'
+            ),
+            None,
+        ),
+        # an author box: the link to the author's page, not the whole box
+        (
+            ('<div class="author-box"><h4><a href="/author/jenny">Jenny Smith</a></h4><p>Writes about rivers.</p></div>'),
+            "Jenny Smith",
+        ),
+        (
+            (
+                '<div class="author-card"><a href="/author/jane-smith">Jane Smith</a> '
+                '<a href="https://linkedin.com/in/js">LinkedIn</a> <a href="https://js.example">Website</a></div>'
+            ),
+            "Jane Smith",
+        ),
+        ('<div class="author-box"><h4>Jenny Smith</h4></div>', "Jenny Smith"),
+        # an author-page link outside an author or byline container does not count
+        (
+            '<div class="byline">By Jane Smith</div><footer><a href="/authors/apply">Write for us</a></footer>',
+            "Jane Smith",
+        ),
+    ],
+)
+def test_author_cards_and_author_links(body, expected):
+    "Teaser cards are no bylines, and an author box is read from its author-page link."
+    assert extract_metadata(_byline_page(body)).author == expected
+
+
 def test_url():
     """Test URL extraction"""
     expected = "https://example.org"
