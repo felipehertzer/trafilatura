@@ -5,6 +5,7 @@ Module bundling all functions needed to scrape metadata from webpages.
 import json
 import logging
 import re
+import unicodedata
 from copy import deepcopy
 from html import unescape
 from typing import Any
@@ -348,6 +349,68 @@ def examine_title_element(
     return title, None, None
 
 
+TITLE_SITE_SUFFIX = re.compile(r"^(.{10,}?)\s+[|–—•·-]\s+([^|–—•·]{3,40})$")
+TITLE_SUFFIX_SEPARATOR = re.compile(r"^\s*[|–—•·~-]\s+")
+LEADING_ARTICLE = re.compile(r"^the\s+", flags=re.IGNORECASE)
+
+
+def site_key(value: str) -> str:
+    "A name's letters and digits, folded for case and accents: Süddeutsche, sueddeutsche."
+    value = unicodedata.normalize("NFKD", value.casefold())
+    return re.sub(r"[\W_]+", "", "".join(char for char in value if not unicodedata.combining(char)))
+
+
+def site_keys(sitename: str | None, hostname: str | None) -> set[str]:
+    "Keys naming the site: its name, and its host with and without the domain suffix."
+    keys = set()
+    if sitename:
+        keys.add(site_key(LEADING_ARTICLE.sub("", sitename.strip())))
+    if hostname:
+        host = hostname.removeprefix("www.")
+        keys |= {site_key(host.split(".", 1)[0]), site_key(host)}
+    return {key for key in keys if len(key) >= 3}
+
+
+def names_site(segment: str, keys: set[str]) -> bool:
+    "Whether a title segment is the site's name, followed by at most two words (CNN Politics)."
+    words = LEADING_ARTICLE.sub("", segment.strip()).removeprefix("www.").split()
+    for count in range(1, len(words) + 1):
+        if site_key(" ".join(words[:count])) in keys:
+            return len(words) - count <= 2
+    return False
+
+
+def strip_site_suffix(title: str, sitename: str | None, hostname: str | None, tree: HtmlElement) -> str:
+    """Remove trailing branding that the page shows is no part of the headline.
+
+    The article's own headline (an h1 outside the page chrome, or itemprop=headline)
+    followed by a separator marks the rest as branding. Otherwise only a last segment
+    naming the site goes: "Headline | CNN Politics" for the site CNN, "Headline -
+    9to5Mac" for the host 9to5mac.com.
+    """
+    normalized = " ".join(unescape(title).replace("\u00a0", " ").split())
+    keys = site_keys(sitename, hostname)
+    headings = [
+        heading
+        for heading in tree.iter("h1")
+        if not heading.xpath("ancestor::header|ancestor::nav|ancestor::*[@role='banner']")
+        or heading.xpath("ancestor::article|ancestor::main")
+    ]
+    for headline in [block_text(heading) for heading in headings] + tree.xpath('.//*[@itemprop="headline"]/@content'):
+        headline = " ".join((headline or "").replace("\u00a0", " ").split())
+        if (
+            len(headline) >= 10
+            and site_key(headline) not in keys
+            and normalized.startswith(headline)
+            and TITLE_SUFFIX_SEPARATOR.match(normalized[len(headline) :])
+        ):
+            return headline
+    match = TITLE_SITE_SUFFIX.match(normalized)
+    if match and names_site(match[2], keys):
+        return match[1].strip()
+    return title
+
+
 def restore_quote_truncated_title(tree: HtmlElement, title: str) -> str:
     """Use <title> when an unescaped quote cut a meta title short.
 
@@ -594,7 +657,8 @@ def extract_metadata(
     date_config["url"] = metadata.url
     metadata.date = find_date(tree, **date_config)
 
-    # sitename
+    # sitename; one read from the title cannot tell the title's branding
+    declared_sitename = metadata.sitename
     if not metadata.sitename:
         metadata.sitename = extract_sitename(tree)
     if metadata.sitename:
@@ -608,6 +672,10 @@ def extract_metadata(
         mymatch = META_URL.match(metadata.url)
         if mymatch:
             metadata.sitename = mymatch[1]
+
+    # trailing branding copied from og:title or <title>
+    if metadata.title:
+        metadata.title = strip_site_suffix(metadata.title, declared_sitename, metadata.hostname, tree)
 
     # categories
     if not metadata.categories:

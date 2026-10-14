@@ -762,6 +762,82 @@ def test_title_cut_by_unescaped_quote():
     assert extract_metadata(f"<html><head>{intact}{other}</head><body></body></html>").title == ("Plain headline about rivers")
 
 
+@pytest.mark.parametrize(
+    ("head", "body", "url", "expected"),
+    [
+        # a last segment naming the site, by name or host
+        (
+            (
+                '<meta property="og:site_name" content="CNN">'
+                '<meta property="og:title" content="Rain floods the city centre | CNN Politics">'
+            ),
+            "",
+            "https://edition.cnn.com/a",
+            "Rain floods the city centre",
+        ),
+        (
+            '<meta property="og:title" content="Apple ships the new laptop - 9to5Mac">',
+            "",
+            "https://9to5mac.com/a",
+            "Apple ships the new laptop",
+        ),
+        (
+            (
+                '<meta property="og:site_name" content="Süddeutsche Zeitung">'
+                '<meta property="og:title" content="Rain floods the city centre - Süddeutsche Zeitung">'
+            ),
+            "",
+            "https://www.sueddeutsche.de/a",
+            "Rain floods the city centre",
+        ),
+        # the article's own headline marks the rest as branding
+        (
+            '<meta property="og:title" content="Rain floods the city centre | Weather | Example Media">',
+            "<article><h1>Rain floods the city centre</h1></article>",
+            "https://example.org/a",
+            "Rain floods the city centre",
+        ),
+        # a site-title h1 in the page header is no headline
+        (
+            '<meta property="og:title" content="The Daily Example | Rain floods the city centre">',
+            "<header><h1>The Daily Example</h1></header>",
+            "https://example.org/a",
+            "The Daily Example | Rain floods the city centre",
+        ),
+        # whole words name the site, with at most two more: no "Hill" in "Hillary", no "Age" in "Age pension"
+        (
+            '<meta property="og:title" content="Trump attacks his rival – Hillary Clinton responds">',
+            "",
+            "https://thehill.com/a",
+            "Trump attacks his rival – Hillary Clinton responds",
+        ),
+        (
+            (
+                '<meta property="og:site_name" content="The Age">'
+                '<meta property="og:title" content="Budget 2026 explained - Age pension to rise in March">'
+            ),
+            "",
+            "https://www.theage.com.au/a",
+            "Budget 2026 explained - Age pension to rise in March",
+        ),
+        # a site name read from the title itself proves nothing about the title
+        (
+            (
+                '<meta property="og:title" content="[Rezi] Love is War - Sehnsucht von R. K. Lilley">'
+                "<title>[Rezi] Love is War - Sehnsucht von R. K. Lilley</title>"
+            ),
+            "",
+            "https://example.blogspot.com/a",
+            "[Rezi] Love is War - Sehnsucht von R. K. Lilley",
+        ),
+    ],
+)
+def test_title_site_suffix(head, body, url, expected):
+    "Trailing branding goes when the page shows it is the site's name or follows the article's headline."
+    doc = f"<html><head>{head}</head><body>{body}</body></html>"
+    assert extract_metadata(doc, default_url=url).title == expected
+
+
 def test_extract_json_parse_error():
     "Crude-regex fallback for malformed JSON-LD extracts each field; comma-publisher is rejected."
     blob = (
