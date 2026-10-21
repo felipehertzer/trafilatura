@@ -18,6 +18,11 @@ from .utils import lru_cache, trim
 
 STRIP_EXTENSION = re.compile(r"\.[^/?#]{2,63}$")
 
+# Scripts written without spaces between words (Chinese, Japanese, Thai, Lao,
+# Myanmar, Khmer): a whitespace-delimited token there is a run of clauses joined
+# by the script's own punctuation (full-width commas, full stops, quotes), not one word.
+UNSPACED_SCRIPT = re.compile("[\u0e00-\u0eff\u1000-\u109f\u1780-\u17ff\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
 
 @cache
 def _punct_tbl() -> dict[int, str]:
@@ -53,12 +58,17 @@ def _is_word_with_marks(token: str) -> bool:
 def sample_tokens(inputstring: str, length: int = 64) -> list[str]:
     """Split input into list of tokens and adjust length threshold to make sure
     there is enough data."""
-    # isalnum() first (C-fast); only non-ASCII leftovers need the marks check
-    tokens = [
-        t
-        for token in inputstring.split()
-        if (t := token.strip(string.punctuation)).isalnum() or (not t.isascii() and _is_word_with_marks(t))
-    ]
+    tokens = []
+    for token in inputstring.split():
+        token = token.strip(string.punctuation)
+        # isalnum() first (C-fast); only non-ASCII leftovers need the marks check
+        if token.isalnum() or (not token.isascii() and _is_word_with_marks(token)):
+            tokens.append(token)
+        elif UNSPACED_SCRIPT.search(token):
+            # Otherwise every clause is dropped and only a page's Latin words
+            # (a "Share" button) are hashed, so different stories collide.
+            tokens.extend(t for t in token.translate(_punct_tbl()).split() if t.isalnum() or _is_word_with_marks(t))
+
     if not tokens:
         # non-latin punctuation, e.g. mandarin 。
         tokens = [
