@@ -43,7 +43,8 @@ def test_hashes():
     assert generate_hash_filename(content) == "42LNugG3Sc95646i"
     assert content_fingerprint("Hello world! This is a test string with some numbers 123.") == "5efdce9f2b554683"
     assert content_fingerprint("这是一个测试。我们在测试中文。") == "ff377edee6edfb78"
-    assert content_fingerprint("Hello世界。This is混合文本!") == "24979dc6c8a26a5"
+    # its clauses were dropped before (fingerprint 24979dc6c8a26a5); now they are hashed
+    assert content_fingerprint("Hello世界。This is混合文本!") == "72ca767e6c8a85b7"
 
 
 def test_simhash():
@@ -222,6 +223,23 @@ def test_duplicate_test_boundaries():
     assert [duplicate_test(above_limit, options) for _ in range(6)] == [False, False, False, True, True, True]
 
 
+def test_stories_in_unspaced_scripts_hash_by_their_text():
+    "Different Chinese stories sharing a page's Latin words no longer collide."
+    share = "分享 Share "
+    story_a = (
+        share
+        + "【本報訊】端午佳節之際，中國著名旅遊景點、列入「世界文化遺產」的福建省廈門鼓浪嶼，遭央視曝光。對此，廈門市回應。"
+    )
+    story_b = share + "【本報訊】康樂及文化事務署弘揚中華文化辦公室策劃的首屆「中華文化節」，在沙田舉辦嘉年華。"
+    assert generate_bow_hash(story_a) != generate_bow_hash(story_b)
+    assert "端午佳節之際" in sample_tokens(story_a)
+    # Latin text keeps its tokens, so existing fingerprints are unchanged
+    english = "Brisbane's council (finally) approved the U.S.-style plan: rents rise again."
+    assert sample_tokens(english) == ["council", "finally", "approved", "the", "plan", "rents", "rise", "again"]
+    japanese = "東京都は２１日、新しい計画を発表した。市民の反応は様々だ。"
+    assert sample_tokens(japanese) == ["東京都は２１日", "新しい計画を発表した", "市民の反応は様々だ"]
+
+
 def test_sample_tokens():
     "Token sampling: regular, fallback and threshold-relaxation inputs."
     tokens = sample_tokens("Hello world! This is a test string with some numbers 123.")
@@ -230,8 +248,8 @@ def test_sample_tokens():
     assert "123" in tokens
     # Chinese punctuation: fallback path
     assert sample_tokens("这是一个测试。我们在测试中文。") == ["这是一个测试", "我们在测试中文"]
-    # mixed text: primary path yields one token, no fallback
-    assert sample_tokens("Hello世界。This is混合文本!") == ["is混合文本"]
+    # mixed text: a token in a script written without spaces is split on its punctuation
+    assert sample_tokens("Hello世界。This is混合文本!") == ["Hello世界", "This", "is混合文本"]
     assert sample_tokens("") == []
     assert sample_tokens("!!! ... ???") == []
     assert sample_tokens("。、！") == []

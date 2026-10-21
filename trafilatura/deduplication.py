@@ -18,6 +18,11 @@ from .utils import trim
 
 STRIP_EXTENSION = re.compile(r"\.[^/?#]{2,63}$")
 
+# Scripts written without spaces between words (Chinese, Japanese, Thai, Lao,
+# Myanmar, Khmer): a whitespace-delimited token there is a run of clauses joined
+# by the script's own punctuation (full-width commas, full stops, quotes), not one word.
+UNSPACED_SCRIPT = re.compile("[\u0e00-\u0eff\u1000-\u109f\u1780-\u17ff\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
 
 @cache
 def _punct_tbl() -> dict[int, str]:
@@ -41,6 +46,10 @@ def sample_tokens(inputstring: str, length: int = 64) -> list[str]:
         token = token.strip(string.punctuation)
         if token.isalnum():
             tokens.append(token)
+        elif UNSPACED_SCRIPT.search(token):
+            # Otherwise every clause is dropped and only a page's Latin words
+            # (a "Share" button) are hashed, so different stories collide.
+            tokens.extend(t for t in token.translate(_punct_tbl()).split() if t.isalnum())
 
     if not tokens:
         # non-latin punctuation, e.g. mandarin 。
