@@ -153,8 +153,13 @@ COMMENTS_XPATH = [
 
 _COMMENTS_ID = "[Cc]omment(?!ary)|comol"
 _COMMENTS_CLASS = "^[Cc]omment(?!ary)|(?:^|\\s)(?!(?:has|no|with|show|open|closed)-)[\\w]+-comments(?:\\s|$)"
-# Viafoura comment widgets (class viafoura* or custom <vf-*> elements)
-_VIAFOURA_XPATH = XPath(".//*[contains(@class, 'viafoura') or starts-with(local-name(), 'vf-')]")
+# Viafoura comment widgets: a class token starting "viafoura", or custom <vf-*>
+# elements. Future plc marks its article wrapper with a feature class
+# "flw-article-viafoura", which a substring match removed with the article.
+_VIAFOURA_XPATH = XPath(
+    ".//*[re:test(@class, '(?:^|\\s)viafoura') or starts-with(local-name(), 'vf-')]",
+    namespaces={"re": REGEXP_NS},
+)
 REMOVE_COMMENTS_XPATH = [
     XPath(
         f"""
