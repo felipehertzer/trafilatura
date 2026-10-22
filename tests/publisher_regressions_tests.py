@@ -84,6 +84,22 @@ def test_prefixed_comment_section_is_not_byline_or_body():
     assert "Join the conversation" not in result.text
 
 
+def test_viafoura_feature_class_on_the_article_wrapper_keeps_the_article():
+    # Future plc (GamesRadar, 2026-10): the article wrapper carries feature flags,
+    # one of them "flw-article-viafoura"; the comment widget is its own element.
+    body = (
+        '<article><div id="content" class="flw-widget-newsletter flw-article-viafoura">'
+        f'<div id="article-body"><p>{PARAGRAPH * 8}</p></div>'
+        '<div class="viafoura"><p>Join the conversation. Comments are closed.</p></div>'
+        "<vf-conversations><p>Sign in to comment on this story.</p></vf-conversations>"
+        "</div></article>"
+    )
+    result = bare_extraction(page(body=body), include_comments=False)
+    assert PARAGRAPH.strip() in result.text
+    assert "Join the conversation" not in result.text
+    assert "Sign in to comment" not in result.text
+
+
 def test_has_comments_state_class_does_not_drop_article():
     body = '<article class="post has-comments"><p>' + PARAGRAPH * 4 + "</p></article>"
     assert "new bridge" in bare_extraction(page("", body)).text
