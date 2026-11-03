@@ -298,6 +298,11 @@ def handle_paragraphs(element: _Element, potential_tags: set[str], options: Extr
 
     # children
     processed_element = Element(element.tag)
+    # a figure survives the cleaning inside a paragraph when one figure is nested in another
+    # (tree_cleaning's walk ends in the deleted subtree); its caption is not the paragraph's text
+    if not options.images:
+        for figure in list(element.iterdescendants("figure")):
+            delete_element(figure)
     # unexpected children: keep their text in place
     strip_tags(element, *{str(c.tag) for c in element.iterdescendants("*") if c.tag not in {*potential_tags, "done"}})
     for child in element.iter("*"):
