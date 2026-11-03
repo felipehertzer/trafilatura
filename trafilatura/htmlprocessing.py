@@ -84,8 +84,31 @@ ALTERNATE_CONTENT = {"noscript", "fencedframe"}
 UNDO_MAX_WORDS = 50
 
 
+# The rest of an article that a "continue reading" control reveals: a hidden block, last in its
+# container, right after an element that is nothing but that control, holding article paragraphs
+# and preceded by the visible ones. Hidden blocks are otherwise discarded as page furniture.
+HIDDEN_CONTINUATION_XPATH = XPath(
+    """
+    .//*[@hidden or contains(translate(@style, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ \t\r\n', 'abcdefghijklmnopqrstuvwxyz'),
+    'display:none')][not(following-sibling::*)]
+    [preceding-sibling::*[1][self::button or (.//button and normalize-space() = normalize-space(.//button[1]))]]
+    [count(.//p[string-length(normalize-space()) > 80]) >= 2]
+    [preceding-sibling::*//p[string-length(normalize-space()) > 80]]
+    """
+)
+
+
+def reveal_hidden_continuation(tree: HtmlElement) -> None:
+    "Un-hide the rest of an article kept behind a continue-reading control."
+    for elem in HIDDEN_CONTINUATION_XPATH(tree):
+        elem.attrib.pop("hidden", None)
+        elem.attrib.pop("style", None)
+
+
 def tree_cleaning(tree: HtmlElement, options: Extractor) -> HtmlElement:
     "Prune the tree by discarding unwanted elements."
+    # before the controls go: their hidden continuation would be discarded with them
+    reveal_hidden_continuation(tree)
     # salvage formulas before <math> is discarded along with its subtree
     recover_math(tree)
     # determine cleaning strategy
