@@ -224,3 +224,39 @@ def test_viafoura_comment_widgets_are_removed():
     )
     text = bare_extraction(page("", body), include_comments=False).text
     assert "public display name" not in text
+
+
+def test_hidden_continuation_after_its_control_is_text():
+    rest = "Residents will be consulted on the final design before construction begins next spring. "
+    body = (
+        '<article><div class="body"><div class="items"><p>' + PARAGRAPH * 2 + "</p><p>" + PARAGRAPH * 2 + "</p></div>"
+        '<div class="more"><button>Story continues</button></div>'
+        '<div class="rest" style="display: none"><p>' + rest * 2 + "</p><p>" + rest * 2 + "</p></div></div></article>"
+    )
+    text = bare_extraction(page("", body)).text
+    assert "consulted on the final design" in text
+    assert "Story continues" not in text
+
+
+def test_only_a_continuation_behind_its_control_is_revealed():
+    from lxml import html
+
+    from trafilatura.htmlprocessing import reveal_hidden_continuation
+
+    prose = "<p>" + PARAGRAPH * 2 + "</p>"
+    visible = '<div class="items">' + prose * 2 + "</div>"
+    hidden = '<div class="rest" style="display:none">' + prose * 2 + "</div>"
+    cases = {
+        # the control alone, then the rest of the article, last in the body
+        visible + '<div class="more"><button>Continue reading</button></div>' + hidden: True,
+        # a dialog: its button comes with other text
+        visible + '<div class="consent"><p>We use cookies.</p><button>Accept</button></div>' + hidden: False,
+        # not the last block of its container
+        visible + "<button>Show</button>" + hidden + "<div>Related stories</div>": False,
+        # no visible article paragraphs before it
+        "<button>Show</button>" + hidden: False,
+    }
+    for body, revealed in cases.items():
+        tree = html.fromstring(f"<html><body><article>{body}</article></body></html>")
+        reveal_hidden_continuation(tree)
+        assert (tree.find(".//div[@class='rest']").get("style") is None) is revealed, body
