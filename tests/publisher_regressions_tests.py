@@ -260,3 +260,16 @@ def test_only_a_continuation_behind_its_control_is_revealed():
         tree = html.fromstring(f"<html><body><article>{body}</article></body></html>")
         reveal_hidden_continuation(tree)
         assert (tree.find(".//div[@class='rest']").get("style") is None) is revealed, body
+
+
+def test_caption_of_a_figure_left_in_a_paragraph_is_not_text():
+    # WordPress image blocks nested in a figure inside <p>: the cleaning loses track of later figures
+    image = (
+        '<div class="media"><figure class="outer"><p><figure class="wp-caption"><img src="a.jpg">'
+        "<figcaption>The Disney line was a staple of the catalog. H. Armstrong Roberts/Getty Images"
+        "</figcaption></figure></p></figure></div>"
+    )
+    body = "<article>" + ("<p>" + PARAGRAPH * 2 + "</p>" + image) * 3 + "</article>"
+    text = bare_extraction(page("", body)).text
+    assert "new bridge" in text
+    assert "Getty Images" not in text
