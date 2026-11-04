@@ -293,3 +293,18 @@ def test_capitals_label_glued_to_a_name_goes():
         assert normalize_authors(None, brand) == brand
     for byline in ("CXFocus Editor", "CQUniversity Australia", "USCFootball Staff", "DDNet News Desk"):
         assert normalize_authors(None, byline) == byline
+
+
+def test_site_suffix_after_a_headline_holding_a_separator():
+    title = "These earbuds are a top pick for workouts - and they're now $40 off"
+    head = f'<meta property="og:title" content="{title} - ZDNET"><meta property="og:site_name" content="ZDNET">'
+    url = "https://www.zdnet.com/tech/earbuds-deal/"
+    assert extract_metadata(page(head, url=url)).title == title
+    # the JSON-LD headline writes the same title with an en dash: no match, the suffix still goes
+    headline = title.replace(" - ", " – ")
+    head += ld({"@context": "https://schema.org", "@type": "NewsArticle", "headline": headline})
+    assert extract_metadata(page(head, url=url)).title == title
+    # a first segment naming the site still takes the rest with it
+    head = '<meta property="og:title" content="Page Not Found - Three D Radio - South Australia">'
+    head += '<meta property="og:site_name" content="Three D Radio">'
+    assert extract_metadata(page(head)).title == "Page Not Found"
