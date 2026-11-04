@@ -273,3 +273,12 @@ def test_caption_of_a_figure_left_in_a_paragraph_is_not_text():
     text = bare_extraction(page("", body)).text
     assert "new bridge" in text
     assert "Getty Images" not in text
+
+
+def test_apostrophes_inside_words_are_not_quotes():
+    # a quoted nickname goes, an apostrophe inside a word does not open one
+    assert normalize_authors(None, "From CNN's Dana O'Neil in Atlanta") == "CNN's Dana O'Neil"
+    assert normalize_authors(None, "From CNN’s Frank Nunns O’Connell") == "CNN’s Frank Nunns O’Connell"
+    assert normalize_authors(None, "Dana 'Dee' O'Neil") == "Dana O'Neil"
+    assert normalize_authors(None, 'Jim "Jimbo" Smith') == "Jim Smith"
+    assert normalize_authors(None, "Yoshi(nostalgicfish)") == "Yoshi"
