@@ -321,3 +321,29 @@ def test_site_suffix_naming_the_publisher_without_its_legal_form():
     )
     metadata = extract_metadata(page(head, url="https://ncreview.com.au/2026/06/18/wordy-2026-06-18/"))
     assert metadata.title == "Wordy Challenge (18/06/2026) 18/06/2026"
+
+
+def test_byline_skips_author_bio_prose_and_category_links():
+    # scenestr: the author box's prose is no name; its byline is a generic one
+    box = (
+        '<div id="author-bio" class="d-flex" itemprop="author"><div class="author-details">'
+        '<h4 class="author-name"> Written by <a href="/staff-writers">Staff Writers</a> </h4>'
+        '<div class="author-about mb-2">Our eclectic team of writers from around Australia – and some beyond.</div>'
+        "</div></div>"
+    )
+    html = page('<meta name="author" content="Staff Writers">', f"<p>{PARAGRAPH}</p>{box}")
+    assert extract_metadata(html).author == "Staff Writers"
+    assert extract_metadata(html, author_blacklist={"Staff Writers"}).author is None
+    # cxfocus: a WordPress byline row also holds the post's categories
+    byline = (
+        '<div class="byline">By <span class="author vcard"><a class="url fn n" href="/author/admin/">Mark Atterby</a>'
+        '</span> <span class="cat-links">Posted in <a href="/category/contact-centre/" rel="category tag">'
+        "Contact Centre &amp; Channels</a></span></div>"
+    )
+    assert extract_metadata(page(body=f"{byline}<p>{PARAGRAPH}</p>")).author == "Mark Atterby"
+    # Twenty Seventeen: the author-description box holds the name heading, which stays
+    box = (
+        '<div class="author-description"><h2 class="author-title">Jane Doe</h2>'
+        '<p class="author-bio">Jane writes about cities and the people who build them.</p></div>'
+    )
+    assert extract_metadata(page(body=f"<p>{PARAGRAPH}</p>{box}")).author == "Jane Doe"
