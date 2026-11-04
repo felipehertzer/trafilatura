@@ -22,6 +22,7 @@ from lxml.html import HtmlElement, tostring
 from .baseline import block_text
 from .htmlprocessing import prune_unwanted_nodes
 from .json_metadata import (
+    AUTHOR_LEGAL_FORMS,
     extract_json,
     extract_json_parse_error,
     normalize_authors,
@@ -322,6 +323,10 @@ def examine_title_element(
 TITLE_SEGMENT_SEPARATOR = re.compile(r"\s[|–—•·-]\s+")
 
 
+# a publisher's legal name: "The North Central Review Pty Ltd" brands its pages without the form
+SITENAME_LEGAL_FORM = re.compile(rf"(?:[\s,]+(?:{'|'.join(sorted(AUTHOR_LEGAL_FORMS))})\.?)+$", flags=re.IGNORECASE)
+
+
 def _site_key(value: str) -> str:
     value = re.sub(r"^the\s+", "", value.strip(), flags=re.IGNORECASE)
     return re.sub(r"[^0-9a-z]+", "", value.casefold())
@@ -350,7 +355,7 @@ def strip_site_suffix(title: str, sitename: str | None, hostname: str | None, tr
                 and TITLE_SUFFIX_SEPARATOR.match(normalized[len(headline) :])
             ):
                 return headline
-    owners = [_site_key(sitename or "")]
+    owners = [_site_key(SITENAME_LEGAL_FORM.sub("", sitename or ""))]
     if hostname:
         owners.append(_site_key(hostname.removeprefix("www.").split(".", 1)[0]))
         owners.append(_site_key(hostname.removeprefix("www.")))

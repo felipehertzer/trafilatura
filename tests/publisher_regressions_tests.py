@@ -308,3 +308,16 @@ def test_site_suffix_after_a_headline_holding_a_separator():
     head = '<meta property="og:title" content="Page Not Found - Three D Radio - South Australia">'
     head += '<meta property="og:site_name" content="Three D Radio">'
     assert extract_metadata(page(head)).title == "Page Not Found"
+
+
+def test_site_suffix_naming_the_publisher_without_its_legal_form():
+    head = '<meta property="og:title" content="Wordy Challenge (18/06/2026) 18/06/2026 - The North Central Review">'
+    head += ld(
+        {
+            "@context": "https://schema.org",
+            "@type": "NewsArticle",
+            "publisher": {"@type": "Organization", "name": "The North Central Review Pty Ltd"},
+        }
+    )
+    metadata = extract_metadata(page(head, url="https://ncreview.com.au/2026/06/18/wordy-2026-06-18/"))
+    assert metadata.title == "Wordy Challenge (18/06/2026) 18/06/2026"
