@@ -190,6 +190,20 @@ AUTHOR_SENTENCE_WORDS = frozenset(
     }
 )  # fmt: skip
 AUTHOR_WORD = re.compile(r"[^\W\d_]+")
+# A column label in capitals that the publisher glued to the name ("CITY BEATChris
+# Herde", "CNNNeil Connell"): the label goes when two name words follow it. A brand
+# written the same way ("SUPERCentral", "CXFocus Editor", "CQUniversity Australia")
+# leaves one word, or words that do not name a person.
+AUTHOR_GLUED_LABEL = re.compile(
+    r"(?:[A-Z]{2,}\s+)*[A-Z]{2,}(?=([A-Z](?:[a-z]|['’][A-Z])[\w'’-]*) ([A-Z](?:[a-z]|['’][A-Z])[\w'’-]*)$)"
+)
+AUTHOR_NOT_NAME_WORDS = frozenset(
+    {
+        "news", "desk", "team", "staff", "group", "media", "network", "solutions", "services", "systems",
+        "labs", "university", "college", "school", "institute", "australia", "international", "online",
+        "magazine", "radio", "sports", "football",
+    }
+)  # fmt: skip
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -540,6 +554,17 @@ def _is_name(author: str) -> bool:
     return sentence < 2 and not (sentence and len(words) >= 4)
 
 
+def _drop_glued_label(author: str) -> str:
+    """Drop a capitals label glued to a two-word name: "CITY BEATChris Herde" -> "Chris Herde"."""
+    match = AUTHOR_GLUED_LABEL.match(author)
+    if match is None:
+        return author
+    words = {match[1].casefold(), match[2].casefold()}
+    if words & (AUTHOR_NOT_NAME_WORDS | AUTHOR_ROLE_WORDS | AUTHOR_TITLE_WORDS | AUTHOR_LEGAL_FORMS):
+        return author
+    return author[match.end() :]
+
+
 def _name_key(author: str) -> str:
     """The letters of a name: "Ben Grubb" and "Bengrubb" are one name."""
     return "".join(AUTHOR_WORD.findall(author.translate(str.maketrans("‘’", "''")))).casefold()
@@ -579,6 +604,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         # remove special characters
         author = AUTHOR_REMOVE_SPECIAL.sub("", author)
         author = AUTHOR_PREFIX.sub("", author)
+        author = _drop_glued_label(author)
         author = AUTHOR_REMOVE_NUMBERS.sub("", author)
         author = AUTHOR_REMOVE_PREPOSITION.sub("", author)
         author = AUTHOR_TRAILING_PREPOSITION.sub("", author)
