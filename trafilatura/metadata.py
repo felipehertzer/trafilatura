@@ -388,6 +388,33 @@ def strip_site_suffix(title: str, sitename: str | None, hostname: str | None, tr
     return title
 
 
+def strip_site_prefix(title: str, sitename: str | None, hostname: str | None, tree: HtmlElement | None) -> str:
+    """Remove leading branding: a first segment naming the site, followed by the page's own headline.
+
+    "scenestr - Weezer Australia 2027 Tour" with <h1>Weezer Australia 2027 Tour</h1>
+    -> "Weezer Australia 2027 Tour" for site "scenestr". Without the headline match
+    the rest may be a tagline ("The Canberra Times | Canberra, ACT"), so it stays.
+    """
+    if tree is None:
+        return title
+    owners = [_site_key(SITENAME_LEGAL_FORM.sub("", sitename or ""))]
+    if hostname:
+        owners.append(_site_key(hostname.removeprefix("www.").split(".", 1)[0]))
+        owners.append(_site_key(hostname.removeprefix("www.")))
+    owners = [owner for owner in owners if len(owner) >= 3]
+    normalized = " ".join(unescape(title).replace("\u00a0", " ").split())
+    separator = TITLE_SEGMENT_SEPARATOR.search(normalized)
+    if separator is None or not any(_site_key(normalized[: separator.start()]) == owner for owner in owners):
+        return title
+    rest = normalized[separator.end() :].strip()
+    headlines = [block_text(h1) for h1 in tree.xpath(".//h1")]
+    headlines += tree.xpath('.//*[@itemprop="headline"]/@content')
+    for headline in headlines:
+        if len(rest) >= 10 and " ".join((headline or "").replace("\u00a0", " ").split()) == rest:
+            return rest
+    return title
+
+
 QUOTE_CHARS = frozenset('"“”')
 
 
@@ -631,9 +658,10 @@ def extract_metadata(
     if metadata.title:
         metadata.title = restore_quote_truncated_title(tree, metadata.title)
 
-    # drop a trailing branding segment copied from og:title or <title>
+    # drop a trailing or leading branding segment copied from og:title or <title>
     if metadata.title:
         metadata.title = strip_site_suffix(metadata.title, metadata.sitename, metadata.hostname, tree)
+        metadata.title = strip_site_prefix(metadata.title, metadata.sitename, metadata.hostname, tree)
 
     # categories
     if not metadata.categories:

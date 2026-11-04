@@ -323,6 +323,18 @@ def test_site_suffix_naming_the_publisher_without_its_legal_form():
     assert metadata.title == "Wordy Challenge (18/06/2026) 18/06/2026"
 
 
+def test_site_prefix_before_the_page_headline():
+    headline = "Weezer Australia 2027 Tour"
+    head = f'<meta property="og:title" content="scenestr - {headline}"><meta property="og:site_name" content="scenestr">'
+    url = "https://scenestr.com.au/music/weezer-australia-2027-tour-20261103"
+    assert extract_metadata(page(head, f"<h1>{headline}</h1>", url=url)).title == headline
+    # without the headline on the page the rest may be a tagline: it stays
+    head = '<meta property="og:title" content="The Canberra Times | Canberra, ACT">'
+    head += '<meta property="og:site_name" content="The Canberra Times">'
+    title = extract_metadata(page(head, "<h1>Local News</h1>", url="https://www.canberratimes.com.au/")).title
+    assert title == "The Canberra Times | Canberra, ACT"
+
+
 def test_byline_skips_author_bio_prose_and_category_links():
     # scenestr: the author box's prose is no name; its byline is a generic one
     box = (
