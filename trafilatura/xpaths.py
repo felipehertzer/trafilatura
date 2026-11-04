@@ -406,17 +406,28 @@ COMMENTS_DISCARD_XPATH = [
 ### 2. METADATA
 
 
+# An author box's prose about the writer ("Our eclectic team of writers from around
+# Australia - and some beyond.") is no byline, nor is an element holding it: the name has
+# an element of its own (Twenty Seventeen's div.author-description holds h2.author-title
+# and p.author-bio). A prose element holding the name heading is the box itself.
+_NOT_AUTHOR_BIO = """
+        [not(descendant-or-self::*[re:test(@class, '(?:^|\\s)author-(?:about|bio|description)(?:\\s|$)') and
+        not(descendant::*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6 or
+        re:test(@class, '[Aa]uthor-?(?:[Nn]ame|[Tt]itle)')])])]
+"""
+
 # the order or depth of XPaths could be changed after exhaustive testing
 AUTHOR_XPATHS = [
     XPath(
         # specific and almost specific
         """
-        //*[self::a or self::address or self::div or self::link or self::p or self::span or self::strong][
+        (//*[self::a or self::address or self::div or self::link or self::p or self::span or self::strong][
         @rel='author' or @id='author' or @class='author' or @itemprop='author name' or rel='me' or
         (self::a and contains(concat(' ', normalize-space(@class), ' '), ' author-link ')) or
         @data-testid='AuthorCard' or @data-testid='AuthorURL' or
-        (@class and re:test(@class, 'author-?name|AuthorName|authorName'))]|//author
-        """,
+        (@class and re:test(@class, 'author-?name|AuthorName|authorName'))]|//author)
+        """
+        + _NOT_AUTHOR_BIO,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
@@ -430,7 +441,8 @@ AUTHOR_XPATHS = [
         (@id and re:test(@id, 'author|zuozhe|bianji|xiaobian')) or
         (@class and re:test(@class, 'author|channel-name|zuozhe|bianji|xiaobian|submitted-by|posted-by|journalist-name'))]
         [not(re:test(@class, '(?:^|\\s)(?:hentry|status-publish)(?:\\s|$)'))]
-        """,
+        """
+        + _NOT_AUTHOR_BIO,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
@@ -441,7 +453,8 @@ AUTHOR_XPATHS = [
         (@id and re:test(@id, '[Aa]uthor')) or
         (@class and re:test(@class, '[Aa]uthor|screenname|writer|[Bb]yline'))]
         [not(re:test(@class, '(?:^|\\s)(?:hentry|status-publish)(?:\\s|$)'))]
-        """,
+        """
+        + _NOT_AUTHOR_BIO,
         namespaces={"re": REGEXP_NS},
     ),
 ]
@@ -470,6 +483,12 @@ AUTHOR_DISCARD_XPATHS = [
         re:test(@class, '(?:^|[\\s_-])(?:date|timestamp|pubdate)(?:[A-Z\\s_-]|$)')]
         [not(descendant-or-self::*[re:test(@class, '[Aa]uthor|[Bb]yline') or @rel='author' or @itemprop='author'])]
         """,
+        namespaces={"re": REGEXP_NS},
+    ),
+    XPath(
+        # a WordPress byline row holds the post's categories and tags
+        # ("By Mark Atterby Posted in Contact Centre & Channels")
+        """.//*[re:test(@class, '(?:^|\\s)(?:cat|tags?)-links(?:\\s|$)')]""",
         namespaces={"re": REGEXP_NS},
     ),
     XPath("//time|//figure|//script|//style"),
