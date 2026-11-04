@@ -96,7 +96,8 @@ AUTHOR_WORD_START = re.compile(r"(\w)(\w*)")
 AUTHOR_REMOVE_NUMBERS = re.compile(r"\d.+?$")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
 AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
-AUTHOR_REMOVE_NICKNAME = re.compile(r'["‘“({\[’\'][^"”]+?[‘’"”\')\]}]')
+# a nickname in quotes or brackets; an apostrophe inside a word ("CNN's Dana O'Neil") is no quote
+AUTHOR_REMOVE_NICKNAME = re.compile(r'["“({\[][^"”]+?[‘’"”\')\]}]|(?<![^\W\d_])[‘’\'][^"”]+?[‘’"”\')\]}](?![^\W\d_])')
 AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 # A date removed from a byline leaves its lead-in behind ("Jenny Smith on",
@@ -536,7 +537,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_TWITTER.sub("", author)
         # replace special characters with space
         author = trim(AUTHOR_REPLACE_JOIN.sub(" ", author))
-        author = AUTHOR_REMOVE_NICKNAME.sub("", author)
+        author = trim(AUTHOR_REMOVE_NICKNAME.sub("", author))
         # remove special characters
         author = AUTHOR_REMOVE_SPECIAL.sub("", author)
         author = AUTHOR_PREFIX.sub("", author)

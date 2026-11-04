@@ -1102,7 +1102,7 @@ def test_normalize_authors():
     assert normalize_authors(None, "John Doe* ") == "John Doe"
     assert normalize_authors(None, "John Doe of John Doe") == "John Doe"
     assert normalize_authors(None, "John Doe — John Doe") == "John Doe"
-    assert normalize_authors(None, 'John "The King" Doe') == "John  Doe"
+    assert normalize_authors(None, 'John "The King" Doe') == "John Doe"
     # dedup keeps the fullest form regardless of order
     assert normalize_authors("Smith", "John Smith") == "John Smith"
     assert normalize_authors("John Smith", "Smith") == "John Smith"
