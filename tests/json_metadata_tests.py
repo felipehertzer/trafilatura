@@ -1072,7 +1072,7 @@ def test_process_parent_keeps_good_sitename():
         (None, "John Doe* ", "John Doe"),
         (None, "John Doe of John Doe", "John Doe"),
         (None, "John Doe — John Doe", "John Doe"),
-        (None, 'John "The King" Doe', "John  Doe"),
+        (None, 'John "The King" Doe', "John Doe"),
         # dedup keeps the fullest form regardless of order
         ("Smith", "John Smith", "John Smith"),
         ("John Smith", "Smith", "John Smith"),
