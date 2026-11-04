@@ -335,7 +335,8 @@ def examine_title_element(
     return title, None, None
 
 
-TITLE_SITE_SUFFIX = re.compile(r"^(.{10,}?)\s+[|–—•·-]\s+([^|–—•·]{3,40})$")
+# a separator between title segments; a headline may hold one itself ("X - and Y - Site")
+TITLE_SEGMENT_SEPARATOR = re.compile(r"\s[|–—•·-]\s+")
 
 
 def _site_key(value: str) -> str:
@@ -366,17 +367,19 @@ def strip_site_suffix(title: str, sitename: str | None, hostname: str | None, tr
                 and TITLE_SUFFIX_SEPARATOR.match(normalized[len(headline) :])
             ):
                 return headline
-    match = TITLE_SITE_SUFFIX.match(title.strip())
-    if not match:
-        return title
-    suffix = _site_key(match[2])
     owners = [_site_key(sitename or "")]
     if hostname:
         owners.append(_site_key(hostname.removeprefix("www.").split(".", 1)[0]))
         owners.append(_site_key(hostname.removeprefix("www.")))
-    for owner in filter(None, owners):
-        if len(owner) >= 3 and suffix.startswith(owner):
-            return match[1].strip()
+    owners = [owner for owner in owners if len(owner) >= 3]
+    stripped = title.strip()
+    # the first separator whose remainder names the site; earlier ones belong to the headline
+    for separator in TITLE_SEGMENT_SEPARATOR.finditer(stripped):
+        head, rest = stripped[: separator.start()], stripped[separator.end() :]
+        if len(head) < 10 or not 3 <= len(rest) <= 40 or any(char in rest for char in "|–—•·"):
+            continue
+        if any(_site_key(rest).startswith(owner) for owner in owners):
+            return head.strip()
     return title
 
 
