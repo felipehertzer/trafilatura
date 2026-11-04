@@ -282,3 +282,14 @@ def test_apostrophes_inside_words_are_not_quotes():
     assert normalize_authors(None, "Dana 'Dee' O'Neil") == "Dana O'Neil"
     assert normalize_authors(None, 'Jim "Jimbo" Smith') == "Jim Smith"
     assert normalize_authors(None, "Yoshi(nostalgicfish)") == "Yoshi"
+
+
+def test_capitals_label_glued_to_a_name_goes():
+    assert normalize_authors(None, "CITY BEATChris Herde") == "Chris Herde"
+    assert normalize_authors(None, "By CITY BEATChris Herde") == "Chris Herde"
+    assert normalize_authors(None, "CNNNeil Connell") == "Neil Connell"
+    # brands written in the same way stay
+    for brand in ("TRUCKtalk", "SUPERCentral", "FOXBusiness", "HCLTech", "ACROBiosystems", "IDTechEx", "AJLabs", "RLDatix"):
+        assert normalize_authors(None, brand) == brand
+    for byline in ("CXFocus Editor", "CQUniversity Australia", "USCFootball Staff", "DDNet News Desk"):
+        assert normalize_authors(None, byline) == byline
