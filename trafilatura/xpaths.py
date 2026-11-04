@@ -415,6 +415,16 @@ COMMENTS_DIV_TEXT_XPATH = XPath(".//div[not(.//div or .//p or .//list)][string-l
 ### 2. METADATA
 
 
+# An author box's prose about the writer ("Our eclectic team of writers from around
+# Australia - and some beyond.") is no byline, nor is an element holding it: the name has
+# an element of its own (Twenty Seventeen's div.author-description holds h2.author-title
+# and p.author-bio). A prose element holding the name heading is the box itself.
+_NOT_AUTHOR_BIO = """
+        [not(descendant-or-self::*[re:test(@class, '(?:^|\\s)author-(?:about|bio|description)(?:\\s|$)') and
+        not(descendant::*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6 or
+        re:test(@class, '[Aa]uthor-?(?:[Nn]ame|[Tt]itle)')])])]
+"""
+
 # the order or depth of XPaths could be changed after exhaustive testing
 # Python ports of the author XPaths (re:test() callbacks are slow).
 # Unlike "//" XPaths, they skip document-level siblings of the root.
@@ -423,6 +433,8 @@ AUTHOR_DISCARD_CLASS = re.compile(
     "^[Cc]omments|commentlist|comments-list|sidebar|is-hidden|quote|embedly-instagram|"
     "article-(?:share|support)|print|category|meta-date|meta-reviewer|meta-status"
     r"|(?:^|\s)(?!(?:has|no|with|show|open|closed)-)\w+-comments(?:\s|$)"
+    # a WordPress byline row holds the post's categories and tags ("By Jane Roe Posted in Local news")
+    r"|(?:^|\s)(?:cat|tags?)-links(?:\s|$)"
 )
 AUTHOR_CLASS_SPECIFIC = re.compile("author[- ]?name|AuthorName|authorName")
 AUTHOR_ID_GENERIC = re.compile("author|zuozhe|bianji|xiaobian")
@@ -435,20 +447,42 @@ AUTHOR_CLASS_ANY = re.compile("[Aa]uthor|screenname|writer|[Bb]yline")
 # but its taxonomy classes can name authors ("author_tags-jane-roe").
 AUTHOR_POST_CONTAINER = re.compile(r"(?:^|\s)(?:hentry|status-publish)(?:\s|$)")
 
+# An author box's prose about the writer is no byline, nor is an element holding it:
+# the name has an element of its own (div.author-about beside h4.author-name).
+# A prose element holding the name heading is the box itself.
+AUTHOR_BIO_CLASS = re.compile(r"(?:^|\s)author-(?:about|bio|description)(?:\s|$)")
+AUTHOR_NAME_OR_TITLE_CLASS = re.compile("[Aa]uthor-?(?:[Nn]ame|[Tt]itle)")
+_HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
+
+
+def _holds_author_bio(elem: HtmlElement) -> bool:
+    "The element is or holds an author box's prose, which holds no name heading."
+    return any(
+        not any(
+            sub.tag in _HEADINGS or AUTHOR_NAME_OR_TITLE_CLASS.search(sub.get("class", ""))
+            for sub in bio.iterdescendants(Element)
+        )
+        for bio in elem.iter(Element)
+        if AUTHOR_BIO_CLASS.search(bio.get("class", ""))
+    )
+
 
 def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
     "Specific and almost specific author markers."
     return [
         elem
         for elem in tree.iter("a", "address", "div", "link", "p", "span", "strong", "author")
-        if elem.tag == "author"
-        or elem.get("rel") == "author"
-        or elem.get("id") == "author"
-        or elem.get("class") == "author"
-        or elem.get("itemprop") == "author name"
-        or (elem.tag == "a" and "author-link" in elem.get("class", "").split())
-        or elem.get("data-testid") in ("AuthorCard", "AuthorURL")
-        or AUTHOR_CLASS_SPECIFIC.search(elem.get("class", ""))
+        if (
+            elem.tag == "author"
+            or elem.get("rel") == "author"
+            or elem.get("id") == "author"
+            or elem.get("class") == "author"
+            or elem.get("itemprop") == "author name"
+            or (elem.tag == "a" and "author-link" in elem.get("class", "").split())
+            or elem.get("data-testid") in ("AuthorCard", "AuthorURL")
+            or AUTHOR_CLASS_SPECIFIC.search(elem.get("class", ""))
+        )
+        and not _holds_author_bio(elem)
     ]
 
 
@@ -464,6 +498,7 @@ def _author_generic(tree: HtmlElement) -> list[HtmlElement]:
             or AUTHOR_CLASS_GENERIC.search(elem.get("class", ""))
         )
         and not AUTHOR_POST_CONTAINER.search(elem.get("class", ""))
+        and not _holds_author_bio(elem)
     ]
 
 
@@ -479,6 +514,7 @@ def _author_any(tree: HtmlElement) -> list[HtmlElement]:
             or AUTHOR_CLASS_ANY.search(elem.get("class", ""))
         )
         and not AUTHOR_POST_CONTAINER.search(elem.get("class", ""))
+        and not _holds_author_bio(elem)
     ]
 
 
