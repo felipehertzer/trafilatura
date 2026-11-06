@@ -489,6 +489,45 @@ def test_baseline_minified_block_boundaries():
     assert sentence.format(1) in result
 
 
+def test_baseline_drops_interface_controls():
+    # a page whose body had not loaded: the main extraction finds nothing and the baseline rescue
+    # used to return its toolbar and navigation as the article (AFR, 2026-11)
+    page = (
+        '<html><body><div id="root"><a class="_15b415a0b751201d-skipLink" href="#nav">Skip to navigation</a>'
+        '<a class="skip-link screen-reader-text" href="#content">Skip to content</a>'
+        '<header class="site-header"><nav><a href="/">Home</a><a href="/markets">Markets</a></nav>'
+        '<button aria-label="Log in">Log in</button></header>'
+        '<article id="content"><h1>Bonus episode</h1>'
+        '<div data-testid="ArticleTools"><button class="print">Print article</button><button>Save</button>'
+        '<div role="tooltip"><button>Log in</button> or <a href="/subscribe">Subscribe</a> to save article</div>'
+        '<a href="mailto:?subject=Bonus episode">Email</a>'
+        '<a href="http://www.linkedin.com/shareArticle?mini=true&amp;url=x">LinkedIn</a>'
+        '<a href="https://twitter.com/share?url=x">Twitter</a>'
+        '<a href="https://www.facebook.com/sharer/sharer.php?u=x">Facebook</a>'
+        '<a href="https://x.com/intent/tweet?text=x">X</a></div>'
+        "<p>This week, a special bonus episode recorded live at the lunch with two columnists.</p>"
+        '<p>Write to <a href="mailto:editor@example.com">the editor</a>.</p>'
+        "</article></div></body></html>"
+    )
+    _, text, _ = baseline(page)
+    for chrome in ("Skip to", "Print article", "Save", "Log in", "Subscribe", "LinkedIn", "Twitter", "Facebook", "Markets"):
+        assert chrome not in text, chrome
+    assert "special bonus episode" in text
+    assert "the editor" in text  # a mailto with a recipient is a link, not a share control
+
+
+def test_baseline_keeps_a_control_that_swallowed_the_page():
+    # malformed markup: the header's menu button is never closed, so the parsed tree holds the
+    # article inside it (Dotdash Meredith); the baseline rescue must keep that text
+    prose = "Many of this season's trends will keep working as the temperature drops, with tights. " * 6
+    page = (
+        '<html><body><header role="banner"><button class="menu-button">Menu'
+        f"<div><p>{prose}</p><p>{prose}</p></div></button></header></body></html>"
+    )
+    _, text, _ = baseline(page)
+    assert "temperature drops" in text
+
+
 def test_html2txt():
     mydoc = "<html><body>Here is the body text</body></html>"
     assert html2txt(mydoc) == "Here is the body text"
