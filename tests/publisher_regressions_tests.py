@@ -389,3 +389,72 @@ def test_css_module_commentary_is_kept():
     body = '<article><div class="_0a7ca1bb3077d74a-commentary"><p>' + PARAGRAPH * 6 + "</p></div></article>"
     text = bare_extraction(page("", body), include_comments=False).text
     assert "new bridge will open" in text
+
+
+def test_furniture_beside_a_one_block_body_stays_out():
+    # Inside Retail: the story is one plain text run (no <p>), which the first frame
+    # (article__body) takes whole as one block, so the search goes on to the wider <article>.
+    # All that is left there is furniture (meta, the subscription offer box, related stories);
+    # the over-pruning guard counts the text already taken and prunes it instead of keeping it.
+    story = "Same-store sales fell three per cent, yet operating profit rose thirteen per cent to a record. "
+    offer = (
+        '<div id="premium-box" class="premium-box__content"><div class="premium-box">'
+        "<h3>This content is for Pro subscribers only.</h3><p>Subscribe now to unlock an all-access pass.</p>"
+        "<h4>Pro - Monthly</h4><ul><li>Unlimited news access</li><li>Daily Pro content straight to your inbox</li>"
+        "<li>Exclusive members only masterclasses</li><li>Weekly careers advice</li></ul>"
+        '<a href="https://news.example.com/subscription">Subscribe now</a></div></div>'
+    )
+    related = "".join(
+        f'<div class="post__item post-{n} category-top-stories"><a href="https://news.example.com/s{n}">Story {n}</a>'
+        "<div>Retailers report a mixed start to the season across the region.</div></div>"
+        for n in range(5)
+    )
+    body = (
+        '<article class="post-1 post type-post status-publish hentry">'
+        '<div class="article__meta">By Jane Doe | 5 November 2026</div><div class="row"><div class="col">'
+        '<div class="article__body"><div class="article__text__holder">'
+        + (story * 3 + "\n\n\n") * 12
+        + "</div></div>"
+        + offer
+        + related
+        + "</div></div></article>"
+    )
+    for options in ({"fast": True}, {}):
+        text = bare_extraction(page("", body), **options).text
+        assert text.count("operating profit rose thirteen per cent") == 36, options
+        assert "subscribers only" not in text, options
+        assert "Subscribe now" not in text, options
+        assert "mixed start to the season" not in text, options
+
+
+def test_over_pruning_guard_counts_text_taken_by_a_narrower_frame():
+    from lxml import html
+    from lxml.etree import XPath
+
+    from trafilatura.htmlprocessing import prune_unwanted_nodes
+
+    def box_pruned(extracted_len):
+        frame = html.fromstring('<article><div class="box">' + "Subscribe now for full access. " * 20 + "</div>x</article>")
+        prune_unwanted_nodes(frame, [XPath(".//div[@class='box']")], with_backup=True, extracted_len=extracted_len)
+        return frame.find(".//div[@class='box']") is None
+
+    # alone in its frame the box is almost all the text, so the guard keeps it, as before
+    assert not box_pruned(0)
+    # beside an article already taken from a narrower frame it is furniture
+    assert box_pruned(5000)
+
+
+def test_a_short_block_taken_before_leaves_the_guard_as_it_was():
+    # a standfirst-length block from the first frame is no article: the wider frame is
+    # read with the guard as before (its headline and lead still come in)
+    from trafilatura.main_extractor import _extract
+    from trafilatura.settings import Extractor
+    from trafilatura.utils import load_html
+
+    body = (
+        '<article class="post-1 post type-post"><h1>Holidays kick off with gumboot hunt</h1>'
+        '<div class="article__body"><div class="article__text__holder">With school holidays set to kick off tonight.</div></div>'
+        '<div class="share-buttons">Share this: Facebook X LinkedIn</div></article>'
+    )
+    _, text, _ = _extract(load_html(page("", body)), Extractor(output_format="txt", fast=True))
+    assert "With school holidays" in text

@@ -21,6 +21,7 @@ from .htmlprocessing import (
 )
 from .settings import (
     DEDUPE_SCAN_CAP,
+    ESCALATION_MAX_LENGTH,
     INLINE_CARRIED,
     INLINE_CONSUMING,
     INLINE_FORMATTABLE,
@@ -644,11 +645,12 @@ def prune_unwanted_sections(
     potential_tags: set[str],
     options: Extractor,
     keep_teasers: bool = False,
+    extracted_len: int = 0,
 ) -> HtmlElement:
     "Rule-based deletion of targeted document sections"
     favor_precision = options.focus == "precision"
     # prune the rest
-    tree = prune_unwanted_nodes(tree, OVERALL_DISCARD_XPATH, with_backup=True)
+    tree = prune_unwanted_nodes(tree, OVERALL_DISCARD_XPATH, with_backup=True, extracted_len=extracted_len)
     # decide if images are preserved
     if "graphic" not in potential_tags:
         tree = prune_unwanted_nodes(tree, DISCARD_IMAGE_ELEMENTS)
@@ -729,8 +731,12 @@ def _extract(tree: HtmlElement, options: Extractor) -> tuple[_Element, str, set[
         if subtree is None:
             continue
         subtree = merge_split_body(subtree)
-        # prune the subtree
-        subtree = prune_unwanted_sections(subtree, potential_tags, options)
+        # prune the subtree; a narrower frame may already hold the article as one text block,
+        # which does not end the search. Once that text is no short extraction, it counts for
+        # the over-pruning guard here, so the furniture left in this wider frame is pruned
+        taken = len(trim(" ".join(result_body.itertext())))
+        extracted_len = taken if taken >= ESCALATION_MAX_LENGTH else 0
+        subtree = prune_unwanted_sections(subtree, potential_tags, options, extracted_len=extracted_len)
         # skip if empty tree
         if len(subtree) == 0:
             continue
