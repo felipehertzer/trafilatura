@@ -465,6 +465,12 @@ BASELINE_INTERFACE_XPATH = XPath(
 
 TAG_CATALOG = frozenset(["code", "del", "head", "hi", "lb", "list", "p", "quote"])
 
+# an extraction below this size counts as possibly short: the cascade's recall escalation
+# (core.trafilatura_sequence, stage 4) retries it, and the main extractor's over-pruning guard
+# does not take it as the article when it reads a wider frame. Calibrated with the escalation
+# set in core.py against the benchmark suite; re-run the full suite after any change.
+ESCALATION_MAX_LENGTH = 3000
+
 # min length for a repeated span to count as an extraction artifact (not coincidental content).
 # Shared by main_extractor's recovery dedup and baseline's paragraph-strategy dedup
 MIN_DUPLICATE_LENGTH = 50

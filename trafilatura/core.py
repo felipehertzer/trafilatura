@@ -26,7 +26,7 @@ from .htmlprocessing import (
 )
 from .main_extractor import _elem_text, extract_comments, extract_content
 from .metadata import Document, extract_metadata
-from .settings import DEFAULT_CONFIG, Extractor, use_config
+from .settings import DEFAULT_CONFIG, ESCALATION_MAX_LENGTH, Extractor, use_config
 from .utils import (
     LANGID_FLAG,
     HtmlInput,
@@ -48,7 +48,7 @@ LOGGER = logging.getLogger(__name__)
 # recall escalation (see trafilatura_sequence, stage 4): retry a short balanced extraction
 # in recall mode. Calibrated as a set against the benchmark suite (own-bench/WMB/WCXB/AEB) —
 # don't tune one value in isolation, and re-run the full suite after any change.
-ESCALATION_MAX_LENGTH = 3000  # only consider extractions below this size
+# ESCALATION_MAX_LENGTH (settings): only consider extractions below this size
 ESCALATION_PAGE_SHARE = 0.2  # ... covering less than this share of the page text
 ESCALATION_ACCEPT_RATIO = 1.5  # accept the retry if it is this much longer
 # justext tends to over-include (whole pricing tables, unrelated sections) rather than stop at
