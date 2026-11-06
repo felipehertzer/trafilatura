@@ -359,3 +359,33 @@ def test_byline_skips_author_bio_prose_and_category_links():
         '<p class="author-bio">Jane writes about cities and the people who build them.</p></div>'
     )
     assert extract_metadata(page(body=f"<p>{PARAGRAPH}</p>{box}")).author == "Jane Doe"
+
+
+STANDFIRST = "The metadata block carries the standfirst of the live coverage for readers. "
+
+
+def test_css_module_comment_preview_is_removed():
+    # Nine's mastheads (AFR) show a reader comment under the live-blog header; CSS-module class
+    # names put a hash before the name, so "commentsPreviewList" does not begin the class
+    body = (
+        '<article><section class="_93a09f9fd29a3122-articleMetadata _93a09f9fd29a3122-hasCommentsButton">'
+        "<p>" + STANDFIRST * 3 + "</p></section>"
+        '<section class="_0a7ca1bb3077d74a-wrapper"><ul class="_0a7ca1bb3077d74a-commentsPreviewList"><li>'
+        '<div class="_0a7ca1bb3077d74a-commentPreview"><div class="_0a7ca1bb3077d74a-commentInfo">'
+        '<span class="_0a7ca1bb3077d74a-commenterName">investmentideas2026</span>'
+        '<span class="_0a7ca1bb3077d74a-commentTimeStamp">2 months ago</span></div>'
+        "<p>Shame nobody copies either side's policies, they would do more good.</p></div></li></ul></section>"
+        "<p>" + PARAGRAPH * 4 + "</p></article>"
+    )
+    text = bare_extraction(page("", body), include_comments=False).text
+    assert "investmentideas2026" not in text
+    assert "nobody copies" not in text
+    assert "new bridge will open" in text
+    # the metadata section only says the page has a comments button: it keeps its text
+    assert "standfirst of the live coverage" in text
+
+
+def test_css_module_commentary_is_kept():
+    body = '<article><div class="_0a7ca1bb3077d74a-commentary"><p>' + PARAGRAPH * 6 + "</p></div></article>"
+    text = bare_extraction(page("", body), include_comments=False).text
+    assert "new bridge will open" in text

@@ -152,7 +152,12 @@ COMMENTS_XPATH = [
 # or contains(@class, 'Comments')
 
 _COMMENTS_ID = "[Cc]omment(?!ary)|comol"
-_COMMENTS_CLASS = "^[Cc]omment(?!ary)|(?:^|\\s)(?!(?:has|no|with|show|open|closed)-)[\\w]+-comments(?:\\s|$)"
+# CSS-module names keep the class name after a hex hash ("_0a7ca1bb3077d74a-commentsPreviewList",
+# Nine's mastheads): the name is matched as if it began the class
+_COMMENTS_CLASS = (
+    "^[Cc]omment(?!ary)|(?:^|\\s)_?[0-9a-f]{8,}-[Cc]omment(?!ary)"
+    "|(?:^|\\s)(?!(?:has|no|with|show|open|closed)-)[\\w]+-comments(?:\\s|$)"
+)
 # Viafoura comment widgets: a class token starting "viafoura", or custom <vf-*>
 # elements. Future plc marks its article wrapper with a feature class
 # "flw-article-viafoura", which a substring match removed with the article.

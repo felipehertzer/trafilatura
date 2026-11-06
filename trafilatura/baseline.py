@@ -13,7 +13,7 @@ from typing import Any
 from lxml.etree import Element, SubElement, _Element
 from lxml.html import HtmlElement, fragment_fromstring
 
-from .settings import BASIC_CLEAN_XPATH, DEDUPE_SCAN_CAP, MIN_DUPLICATE_LENGTH
+from .settings import BASELINE_INTERFACE_XPATH, BASIC_CLEAN_XPATH, DEDUPE_SCAN_CAP, MIN_DUPLICATE_LENGTH
 from .utils import HtmlInput, as_list, load_html, remove_control_characters, trim
 from .xml import delete_element
 
@@ -166,6 +166,27 @@ def _collect_json_content(tree: HtmlElement) -> tuple[list[str], list[str]]:
     return bodies, teasers
 
 
+# An interface element carries labels, not prose. One holding more is not a control but the page
+# itself: an unclosed control or banner swallows the article on malformed markup (Dotdash
+# Meredith's header menu <button> holds the whole story once parsed), and baseline() is what
+# rescues those pages. Measured: toolbars and site navigation hold at most 69 characters outside
+# links, swallowing ones 3,494 and more.
+_INTERFACE_MAX_TEXT = 200
+
+
+def _drop_interface(tree: HtmlElement) -> None:
+    """Delete the interface controls: the toolbar or navigation of a page without its body is
+    not its text. Ancestors come first, so a swallowing element that stays still loses the
+    real controls inside it."""
+    for elem in BASELINE_INTERFACE_XPATH(tree):
+        if elem.getroottree().getroot() is not tree:
+            continue  # inside an element already deleted
+        text = len(" ".join(elem.text_content().split()))
+        links = sum(len(" ".join(a.text_content().split())) for a in elem.iter("a"))
+        if text - links <= _INTERFACE_MAX_TEXT:
+            delete_element(elem)
+
+
 def baseline(filecontent: HtmlInput) -> tuple[_Element, str, int]:
     """Use baseline extraction function targeting content in embedded JSON or text elements.
 
@@ -196,6 +217,7 @@ def baseline(filecontent: HtmlInput) -> tuple[_Element, str, int]:
         return result
 
     tree = basic_cleaning(tree)
+    _drop_interface(tree)
 
     # article tags: a dominant one relegates much smaller siblings to noise (related teasers),
     # similar-sized ones are all content (forum posts). Nested articles excluded (counted in ancestor)
