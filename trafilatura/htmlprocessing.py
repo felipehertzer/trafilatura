@@ -6,6 +6,7 @@ Functions to process nodes in HTML code.
 import logging
 import re
 from copy import deepcopy
+from urllib.parse import urlsplit
 
 from lxml.etree import Element, SubElement, XPath, _Element, strip_elements, strip_tags, tostring
 from lxml.html import HtmlElement
@@ -18,7 +19,7 @@ from .settings import (
     Document,
     Extractor,
 )
-from .utils import LINK_FARM_RATIO, image_src, safe_base_url, safe_relative_url, textfilter, trim
+from .utils import LINK_FARM_RATIO, RE_FILTER, RELATED_LABEL, image_src, safe_base_url, safe_relative_url, textfilter, trim
 from .xml import delete_element, meta_items, separates_inline
 
 LOGGER = logging.getLogger(__name__)
@@ -76,7 +77,43 @@ def _handle_forms(tree: HtmlElement) -> None:
         if total and len(form.text_content()) > total / 2:
             form.tag = "div"
         else:
-            delete_element(form)
+            delete_element(_form_widget(form, total))
+
+
+# A form's widget: the short block around a sign-up, sign-in or subscription form ("Why
+# register?", "Registration is free", the field and its button), never a block holding prose.
+# A comment or search form goes alone: the comments next to it are not its widget.
+WIDGET_MAX_CHARS = 600
+WIDGET_LINE_MAX_CHARS = 100
+_ACCOUNT_FORM = re.compile(r"regist|log-?in|sign-?(?:in|up)|subscri|news-?letter", re.IGNORECASE)
+_OTHER_FORM = re.compile(r"comment|reply|search", re.IGNORECASE)
+
+
+def _account_form(form: HtmlElement) -> bool:
+    "A form that signs the reader up, in or on: named so, or asking for an email or a password."
+    names = " ".join(form.get(attr) or "" for attr in ("id", "class", "action", "name"))
+    if _OTHER_FORM.search(names):
+        return False
+    return _ACCOUNT_FORM.search(names) is not None or bool(form.xpath(".//input[@type='email' or @type='password']"))
+
+
+def _form_widget(form: HtmlElement, total: int) -> HtmlElement:
+    "The largest block around a sign-up form that holds nothing but its short texts."
+    widget = form
+    if not _account_form(form):
+        return widget
+    for parent in form.iterancestors():
+        length = len(trim(parent.text_content()))
+        if (
+            parent.tag not in ("div", "section", "aside")
+            or length > WIDGET_MAX_CHARS
+            or length * 3 > total
+            or parent.find(".//h1") is not None
+            or any(len(trim(p.text_content())) > WIDGET_LINE_MAX_CHARS for p in parent.iter("p", "li"))
+        ):
+            break
+        widget = parent
+    return widget
 
 
 # fallback or embedded copies: paragraphs inside them neither count as removed nor as surviving content
@@ -331,6 +368,184 @@ def delete_by_link_density(
         delete_element(elem)
 
     return subtree
+
+
+# The calls to action that end an article: a link to the site's own social-network profile (not a
+# post, not someone else's profile), or to its own newsletter, subscription or sign-up page
+_SOCIAL_HOST = re.compile(
+    r"(?:^|\.)(?:facebook|instagram|linkedin|twitter|x|tiktok|youtube|pinterest|threads)\.(?:com|net)(?:\.[a-z]{2})?$"
+)
+_SOCIAL_PROFILE_PATH = re.compile(
+    r"^/(?:(?:groups|company|channel|c|user|in|pages)/)?"
+    r"(?!(?:watch|shorts|status|p|reels?|videos?|photos?|posts?|stor(?:y|ies)|hashtag|search|events?|sharer?|intent|embed)(?:[/.]|$))"
+    r"@?([^/]+)/?$"
+)
+_NOT_ALNUM = re.compile(r"[^a-z0-9]+")
+# a site name of fewer letters only counts at the start of a handle ("abc" -> "abcnews")
+SITE_NAME_MIN_CHARS = 4
+_NEWSLETTER_LINK = re.compile(r"news-?letter", re.IGNORECASE)
+_SUBSCRIBE_LINK = re.compile(r"subscri|sign-?up|mailing-?list", re.IGNORECASE)
+# a copyright notice: "© 2026 Example", "Copyright Example 2026", "... All rights reserved."
+_NOTICE = re.compile(r"^\W*(?:©|copyright\b)|\ball rights reserved\b", re.IGNORECASE)
+TRAILING_CALL_MAX_CHARS = 300
+_TRAILING_BLOCKS = ("p", "head", "item", "quote", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote")
+
+
+def _same_site(host: str, page_host: str) -> bool:
+    host, page_host = host.removeprefix("www."), page_host.removeprefix("www.")
+    return host == page_host or host.endswith("." + page_host) or page_host.endswith("." + host)
+
+
+def _link_parts(target: str) -> tuple[str, str, str]:
+    "Host, path and fragment of a link, empty for an address that does not parse."
+    try:
+        parts = urlsplit(target.strip())
+    except ValueError:
+        return "", "", ""
+    return (parts.hostname or "").casefold(), parts.path, parts.fragment
+
+
+def _addresses(elem: HtmlElement) -> list[str]:
+    # a converted link keeps its address in "target"; an unconverted one in "href", where
+    # "target" is the HTML window name ("_blank")
+    return [link.get("href") or link.get("target") or "" for link in elem.iter("ref", "a")]
+
+
+def is_call_to_action(target: str, page_host: str | None) -> bool:
+    "A link to a social-network profile, to a newsletter, or to the site's own subscription page."
+    host, path, fragment = _link_parts(target)
+    if not (host or path or fragment):
+        return False
+    if _SOCIAL_HOST.search(host):
+        profile = _SOCIAL_PROFILE_PATH.match(path)
+        return profile is not None and _site_handle(profile.group(1), page_host)
+    where = f"{path}#{fragment}"
+    return _own_site(host, page_host) and (
+        _NEWSLETTER_LINK.search(where) is not None or _SUBSCRIBE_LINK.search(where) is not None
+    )
+
+
+def _site_handle(handle: str, page_host: str | None) -> bool:
+    'A profile handle naming the site: "adnews" on adnews.com.au, "australianageingagenda" on theageingagenda.com.au.'
+    handle = _NOT_ALNUM.sub("", handle.casefold())
+    if not handle or not page_host:
+        return False
+    for label in page_host.casefold().removeprefix("www.").split("."):
+        name = _NOT_ALNUM.sub("", label.removeprefix("the"))
+        if len(name) >= SITE_NAME_MIN_CHARS and (name in handle or (len(handle) >= SITE_NAME_MIN_CHARS and handle in name)):
+            return True
+        if name and len(name) < SITE_NAME_MIN_CHARS and handle.startswith(name):
+            return True
+    return False
+
+
+def _own_site(host: str, page_host: str | None) -> bool:
+    return not host or (page_host is not None and _same_site(host, page_host.casefold()))
+
+
+def _home_page(target: str, page_host: str | None) -> bool:
+    "A link to the site's own home page (its shop or another subdomain too)."
+    host, path, _ = _link_parts(target)
+    return bool(host) and _own_site(host, page_host) and path in ("", "/")
+
+
+def _trailing_call(elem: HtmlElement, page_host: str | None) -> bool:
+    "A short block that is a call to action or a copyright notice."
+    text = trim(elem.text_content())
+    if len(text) > TRAILING_CALL_MAX_CHARS:
+        return False
+    return _NOTICE.search(text) is not None or any(is_call_to_action(target, page_host) for target in _addresses(elem))
+
+
+def _call_list(elem: HtmlElement, page_host: str | None) -> bool:
+    "A list of short links, most of them calls to action or the site's home page."
+    items = [item for item in elem if item.tag in ("item", "li")]
+    if len(items) < 2:
+        return False
+    calls = 0
+    for item in items:
+        targets = _addresses(item)
+        if not targets or len(trim(item.text_content())) > TRAILING_CALL_MAX_CHARS / 2:
+            return False
+        calls += _trailing_call(item, page_host) or all(_home_page(target, page_host) for target in targets)
+    return calls * 2 >= len(items)
+
+
+# a block passed over, as a lone label is: a few words and no full stop ("Request a Correction")
+MINOR_BLOCK_MAX_WORDS = 8
+_SENTENCE_END = (".", "!", "?", "…", '"', "\u201d", "\u2019")
+
+
+def _minor_block(text: str) -> bool:
+    return len(text.split()) <= MINOR_BLOCK_MAX_WORDS and not text.endswith(_SENTENCE_END)
+
+
+def _short_linked(elem: HtmlElement) -> bool:
+    "A short block holding a link: a teaser, the byline and date of a related story."
+    return len(trim(elem.text_content())) <= TRAILING_CALL_MAX_CHARS and bool(_addresses(elem))
+
+
+RELATED_LIST_ITEM_MAX_CHARS = 150
+
+
+def prune_related_lists(tree: HtmlElement) -> None:
+    """Delete a related-stories label ("Related stories:") and the list of links right under it,
+    wherever it sits in the article: a list of short items, each a link."""
+    for label in [elem for elem in tree.iter(*_TRAILING_BLOCKS) if RELATED_LABEL.match(trim(elem.text_content()))]:
+        following = label.getnext()
+        if following is None or following.tag not in ("list", "ul", "ol"):
+            continue
+        items = [item for item in following if item.tag in ("item", "li")]
+        if items and all(_addresses(item) and len(trim(item.text_content())) <= RELATED_LIST_ITEM_MAX_CHARS for item in items):
+            delete_element(following)
+            delete_element(label)
+
+
+def prune_trailing_calls(tree: HtmlElement, url: str | None) -> None:
+    """Delete the calls to action and the copyright notice that end an article.
+
+    Walking back from the last text block: a short block linking to a social-network profile, a
+    newsletter or the site's own subscription page, or a copyright notice, is page furniture, and
+    so is a list of short links most of which are such calls; the first other block ends the
+    story. Lone labels ("Share", "Advertisement", textfilter() drops them) and other blocks of a
+    few words with no full stop are passed over; short linked blocks under a related-stories label
+    ("Related news") go with it. Nothing goes if the furniture would hold half the text.
+    """
+    try:
+        page_host = urlsplit(url).hostname if url else None
+    except ValueError:
+        page_host = None
+    blocks = [
+        elem
+        for elem in tree.iter(*_TRAILING_BLOCKS)
+        if elem is not tree and next(elem.iterdescendants(*_TRAILING_BLOCKS), None) is None and trim(elem.text_content())
+    ]
+    furniture: list[HtmlElement] = []
+    # short linked blocks walked over: furniture once a related-stories label tops them
+    teasers: list[HtmlElement] = []
+    index = len(blocks) - 1
+    while index >= 0:
+        block = blocks[index]
+        parent = block.getparent()
+        text = trim(block.text_content())
+        if block.tag in ("item", "li") and parent is not None and _call_list(parent, page_host):
+            furniture.append(parent)
+            while index >= 0 and parent in blocks[index].iterancestors():
+                index -= 1
+            continue
+        if _trailing_call(block, page_host):
+            furniture.append(block)
+        elif RELATED_LABEL.match(text):
+            furniture.extend(teasers)
+            teasers = []
+        elif _short_linked(block):
+            teasers.append(block)
+        elif not (RE_FILTER.match(text) or _minor_block(text)):
+            break
+        index -= 1
+    if furniture and 2 * sum(len(trim(elem.text_content())) for elem in furniture) < len(trim(tree.text_content())):
+        for elem in furniture:
+            delete_element(elem)
 
 
 def handle_textnode(

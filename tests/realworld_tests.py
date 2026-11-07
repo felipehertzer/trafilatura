@@ -750,7 +750,9 @@ def test_extract(xmloutput, formatting):
     result = do_load_page("https://knowtechie.com/rocket-pass-4-in-rocket-league-brings-with-it-a-new-rally-inspired-car/")
     assert "Rocket Pass 4 will begin at 10:00 a.m. PDT" in result
     assert "Holy shit, Mortal Kombat 11" in result
-    assert "Let us know down below in the comments" in result
+    # the closing reader prompt sends the reader to the site's own Twitter and Facebook: a call to
+    # action after the story (prune_trailing_calls), like the writer's "keep up with me on Twitter"
+    assert "Let us know down below in the comments" not in result
     assert "Related Topics" not in result
     assert "You can keep up with me on Twitter" not in result
     assert "Hit the track today with Mario Kart Tour" not in result

@@ -1,8 +1,13 @@
 """Regressions from production publisher audits (titles, bylines, bodies)."""
 
 import json
+import re
+
+import pytest
+from lxml.html import fromstring
 
 from trafilatura import bare_extraction, extract_metadata
+from trafilatura.htmlprocessing import is_call_to_action, prune_trailing_calls
 from trafilatura.json_metadata import normalize_authors
 
 PARAGRAPH = "The council confirmed on Saturday that the new bridge will open to traffic next month. "
@@ -497,3 +502,126 @@ def test_a_website_byline_is_no_person():
     assert normalize_authors(None, "J.R.R. Tolkien") == "J R R Tolkien"
     assert normalize_authors(None, "Dr.Smith") == "Dr Smith"
     assert normalize_authors(None, "g.lynch") == "G Lynch"
+
+
+STORY = "".join(f"<p>{PARAGRAPH}Paragraph {n} of the story says more about the bridge works.</p>" for n in range(6))
+LAST_WORDS = "Paragraph 5 of the story says more about the bridge works."
+
+
+def story_text(tail, url="https://news.example.com/story", fast=True):
+    body = f"<article><h1>Bridge opens</h1>{STORY}{tail}</article><footer><p>Contact us</p></footer>"
+    return bare_extraction(page(body=body, url=url), url=url, fast=fast).text
+
+
+@pytest.mark.parametrize("fast", [True, False])
+@pytest.mark.parametrize(
+    "tail",
+    [
+        # newsletter, social profiles and the copyright notice under the story
+        (
+            '<p><strong>Sign up to our <a href="/toolbar/sign-up-for-e-news" target="_blank">newsletter</a>, like us on '
+            '<a href="https://www.facebook.com/examplenews">Facebook</a> or follow us on '
+            '<a href="https://twitter.com/examplenews">Twitter</a>.</strong></p>'
+            "<p>Advertisement</p><p>© 2026 Example News. All rights reserved.</p>"
+        ),
+        # a list of the site's own pages and calls
+        (
+            '<ul><li><a href="https://shop.example.com/">Subscribe to our magazine</a></li>'
+            '<li>Check out <a href="https://www.example.com/">www.example.com</a></li>'
+            '<li><a href="https://www.example.com/subscription/">Subscribe to our newsletter</a></li>'
+            '<li><a href="https://issuu.com/example/docs/issue-12">View our digital magazine</a></li></ul>'
+        ),
+        # related stories under their label, one card a category, a byline and a date
+        (
+            '<h2>Related news</h2><div><a href="/category/whats-new/">What\'s New</a> '
+            '<a href="/author/jane/">BY Jane Doe</a> November 4, 2026</div>'
+        ),
+        # sharing buttons and a related-links block set as a quote
+        (
+            '<p>Share</p><blockquote class="wp-block-related-links"><p>Related*</p>'
+            '<p><a href="/other-story">Council approves the second bridge</a></p></blockquote>'
+        ),
+        # a registration box around its form, and an ad slot
+        (
+            '<div class="paywall"><div class="register_box"><p>Register to continue</p><p>Why register?</p>'
+            "<ul><li>Registration is free and only takes a moment</li><li>Read 3 articles a month</li></ul>"
+            '<form action="/register"><input type="email"><button>Register</button></form></div></div>'
+            '<div class="adv adv-leaderboard"><div class="code-block-label">Advertisement</div></div>'
+        ),
+        # the copyright notice above a few page labels
+        "<p>© 2026 Example News. All rights reserved.</p><div>MEET OUR NEWS CHANNELS</div><div>Request a Correction</div>",
+        # a copyright line marked as such
+        '<div class="row article-copyright"><span>© All content copyright Example. Do not reproduce.</span></div>',
+    ],
+)
+def test_page_furniture_after_the_story_goes(tail, fast):
+    text = story_text(tail, url="https://www.example.com/story", fast=fast)
+    assert text.endswith(LAST_WORDS)
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        # a social post, not a profile
+        '<p>In a post on <a href="https://www.instagram.com/p/C1x2y3/">Instagram</a>, the mayor thanked residents.</p>',
+        # another site's subscription page
+        '<p>Residents can <a href="https://council.example.org/subscribe">subscribe to council alerts</a>.</p>',
+        # a related label inside the story: prose follows it
+        "<p>Related</p><p>The second stage of the project starts in 2028, the state treasurer said.</p>",
+        # the writer's own profile closes the story
+        (
+            "<p>Great bridges need not cost a fortune, and this one came in under budget. Follow "
+            '<a href="https://www.instagram.com/dr.yalda/">Dr Yalda</a> for more.</p>'
+        ),
+    ],
+)
+def test_story_paragraphs_that_link_out_stay(tail):
+    text = story_text(tail)
+    last = re.sub("<[^>]+>", "", tail.split("</p>")[-2].split("<p>")[-1])
+    assert text.endswith(last)
+
+
+def test_furniture_holding_half_the_text_stays():
+    tree = fromstring(
+        '<div><p>The bridge opens.</p><p>Follow us on <a href="https://www.facebook.com/examplenews">Facebook</a>'
+        " for every update on the bridge works, the detours and the opening day.</p></div>"
+    )
+    prune_trailing_calls(tree, "https://news.example.com/story")
+    assert len(tree.findall(".//p")) == 2
+
+
+@pytest.mark.parametrize(
+    ("target", "call"),
+    [
+        ("https://www.linkedin.com/company/example-news/", True),
+        ("https://www.facebook.com/groups/examplenewsreaders", True),
+        # someone else's profile, or a group known by its number only
+        ("https://www.instagram.com/dr.yalda/", False),
+        ("https://www.facebook.com/groups/1264421139061862", False),
+        ("https://www.tiktok.com/@example", True),
+        ("https://twitter.com/example/status/123", False),
+        ("https://www.youtube.com/watch?v=abc", False),
+        ("https://example.com/#subscribe", True),
+        ("https://news.example.com/newsletter", True),
+        ("https://lists.example.org/newsletter", False),
+        ("https://other.example.org/sign-up", False),
+        ("/subscribe/", True),
+        ("http://[broken", False),
+        ("", False),
+    ],
+)
+def test_calls_to_action(target, call):
+    assert is_call_to_action(target, "news.example.com") is call
+
+
+def test_a_related_list_inside_the_story_goes_with_its_label():
+    related = (
+        "<p><strong>Related stories:</strong></p><ul>"
+        '<li><a href="/one">Council approves the second bridge</a></li>'
+        '<li><a href="/two">Detours start on Monday</a></li></ul>'
+    )
+    body = f"<article><h1>Bridge opens</h1>{STORY[:400]}{related}{STORY[400:]}</article>"
+    text = bare_extraction(page(body=body), url="https://news.example.com/story").text
+    assert "Related stories" not in text
+    assert "Detours start on Monday" not in text
+    assert text.endswith(LAST_WORDS)

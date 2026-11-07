@@ -145,11 +145,16 @@ SPACING_PROTECTED = {"code", "pre"}
 TARGET_LANG_ATTRS = ('http-equiv="content-language"', 'property="og:locale"')
 RE_HTML_LANG = re.compile(r"([a-z]{2})")
 
-# Mostly filters for social media (text-level analog of the xpaths social/share tokens)
+# A related-stories heading on its own ("Related", "Related news:")
+_RELATED_LABEL = r"Related(?: (?:stories|articles|posts|news|content|reading|coverage|links))?[:*]?"
+RELATED_LABEL = re.compile(rf"\W*{_RELATED_LABEL}$", flags=re.IGNORECASE)
+# Mostly filters for social media (text-level analog of the xpaths social/share tokens), and lone
+# labels: an ad slot, the sharing buttons, a related-stories heading
 RE_FILTER = re.compile(
     r"\W*(Drucken|E-?Mail|Facebook|Flipboard|Google|Instagram|"
     "Linkedin|Mail|PDF|Pinterest|Pocket|Print|QQ|Reddit|Twitter|"
-    "WeChat|WeiBo|Whatsapp|Xing|Mehr zum Thema:?|More on this.{,8}$)$",
+    "WeChat|WeiBo|Whatsapp|Xing|Mehr zum Thema:?|More on this.{,8}$|"
+    rf"Advertisement|Share(?: this(?: article| story| post)?)?|{_RELATED_LABEL})$",
     flags=re.IGNORECASE,
 )
 # link text > this fraction of total text = link farm (htmlprocessing.link_density_test)

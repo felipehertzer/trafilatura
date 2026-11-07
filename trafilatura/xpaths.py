@@ -251,6 +251,8 @@ _AD_CLASS_TOKENS = (
     "-ad-",
     "(?:^| )ad-",
     "dfp[Aa]d",
+    # the class "adv" alone: "advert-placement" wrappers hold the story between their slots
+    "(?:^| )adv(?:$| )",
     "outbrain",
     "taboola",
     "criteo",
@@ -339,6 +341,8 @@ OVERALL_DISCARD_XPATH = [
         """,
         namespaces={"re": REGEXP_NS},
     ),
+    # related-links blocks set as quotes ("wp-block-related-links")
+    XPath(f".//quote[re:test(@class, '{_alt(_RELATED_CLASS_TOKENS[:1])}')]", namespaces={"re": REGEXP_NS}),
 ]
 
 # conflicts:
