@@ -149,12 +149,36 @@ AUTHOR_ROLE_WORDS = frozenset(
     {
         "editor", "correspondent", "reporter", "writer", "journalist", "producer", "columnist", "presenter",
         "host", "contributor", "critic", "photographer", "spokesperson", "spokesman", "spokeswoman",
-        "commentator", "analyst", "anchor",
+        "commentator", "analyst", "anchor", "director", "manager", "professor", "fellow", "lecturer",
+        "researcher", "historian", "founder", "officer", "economist", "scientist", "president", "chair",
+        "adviser", "advisor", "consultant", "coordinator", "ceo", "cmo", "cto", "cfo", "coo",
     }
 )  # fmt: skip
 # After a comma, a role describes the person before it: "Tracy Neal, Open
-# Justice multimedia journalist", "Laurence Kelson, Census spokesperson".
-AUTHOR_DESCRIPTION = re.compile(rf",[^,;|/&]*?\b(?:{'|'.join(sorted(AUTHOR_ROLE_WORDS))})s?\b[^,;|/&]*", flags=re.IGNORECASE)
+# Justice multimedia journalist", "Laurence Kelson, Census spokesperson". One
+# person holds one role, so a plural is a surname ("Jane Doe, Taylah Fellows").
+AUTHOR_DESCRIPTION = re.compile(rf"\b(?:{'|'.join(sorted(AUTHOR_ROLE_WORDS))})\b", flags=re.IGNORECASE)
+# Post-nominal letters after a comma: "Chelsea Rae Bourgeois, RDN, LD", "Kate Dore, CFP®, EA".
+AUTHOR_CREDENTIALS = frozenset(
+    {
+        "rdn", "rd", "ld", "ea", "cfp", "cpa", "cfa", "phd", "md", "rn", "oam", "am", "ao", "ac", "mba", "msc",
+        "bsc", "jd", "esq", "mph", "dvm", "gaicd", "faicd", "fca",
+    }
+)  # fmt: skip
+# A second person after a role: "Chief political correspondent and Paul Karp".
+AUTHOR_JOINED_NAME = re.compile(r"\s+(?:and|with)\s+(?=[A-ZÀ-Þ][^\W\d_]*\s+[A-ZÀ-Þ])")
+AUTHOR_CREDENTIAL_LIKE = re.compile(r"[A-Za-z]{2,5}\.?[®™]?")
+# A programme part after a comma: "Andrew Whitelaw, Episode 3".
+AUTHOR_EPISODE = re.compile(r"(?:episode|ep|part|series|season|chapter|vol(?:ume)?)\.?\s*\d+", flags=re.IGNORECASE)
+# "Santosh Mehrotra <br> Higher School of Economics, Moscow"
+AUTHOR_LINE_BREAK = re.compile(r"\s*<br\s*/?>\s*", flags=re.IGNORECASE)
+# A byline that is a website, its top-level domain in lower case ("Australia.so", "mirror.co.uk"); a name
+# with initials or a title ("J.R.R. Tolkien", "Dr.Smith") has a space or a capital after the dot.
+AUTHOR_DOMAIN_BYLINE = re.compile(
+    r"(?:www\.)?[\w-]+(?:\.[\w-]+)*\.(?:[a-z]{2}|com|net|org|info|news|media|online|site|biz|app|blog)"
+)
+# A website after a comma: "Robert Jennings, InnerSelf.com".
+AUTHOR_DOMAIN = re.compile(r"[\w-]+(?:\.[\w-]+)*\.(?:com|org|net|edu|gov|io|co|au|nz|uk)\b", flags=re.IGNORECASE)
 # The words of a job title before its role: "Political editor", "Senior
 # political correspondent", "Environment and climate correspondent".
 AUTHOR_TITLE_WORDS = frozenset(
@@ -533,6 +557,52 @@ def _join_foreign_and(author_string: str) -> str:
     return joined
 
 
+def _is_person_detail(segment: str) -> bool:
+    """Whether a comma segment after a name describes that person rather than naming another."""
+    text = segment.strip()
+    if text.strip(".®™ ").casefold() in AUTHOR_CREDENTIALS:
+        return True
+    if AUTHOR_EPISODE.fullmatch(text) or AUTHOR_DOMAIN.fullmatch(text):
+        return True
+    words = {word.casefold() for word in AUTHOR_WORD.findall(text)}
+    return bool(words & (AUTHOR_NOT_NAME_WORDS | AUTHOR_LEGAL_FORMS))
+
+
+def _drop_person_details(author_string: str) -> str:
+    """Drop what follows a name after a comma when it describes the person.
+
+    "Lydia Edwards, Fashion historian, Edith Cowan University" is one person: a
+    role ends the name, and the rest of that credit is the role's organisation
+    ("Sean Crawford, Managing Director, North America, SMG"). Credentials ("RDN"),
+    an organisation ("McGill University"), a website ("InnerSelf.com") or an
+    episode ("Episode 3") go on their own. A list of names stays a list, and a
+    name joined with "and" starts a new credit.
+    """
+    groups = re.split(r"([;|/&])", author_string)
+    for index in range(0, len(groups), 2):
+        segments = groups[index].split(",")
+        kept, in_role = segments[:1], False
+        for segment in segments[1:]:
+            if re.match(r"\s*(?:and|with)\s", segment, flags=re.IGNORECASE):
+                in_role = False
+            elif in_role:
+                continue
+            elif AUTHOR_DESCRIPTION.search(segment):
+                in_role = True
+                # "Sarah Martin, Chief political correspondent and Paul Karp" credits Paul Karp too
+                joined = AUTHOR_JOINED_NAME.split(segment, maxsplit=1)
+                if len(joined) == 1:
+                    continue
+                segment, in_role = " and " + joined[1], False
+            elif _is_person_detail(segment):
+                # an organisation ends the credit too: "Higher School of Economics, Moscow"
+                in_role = not AUTHOR_CREDENTIAL_LIKE.fullmatch(segment.strip())
+                continue
+            kept.append(segment)
+        groups[index] = ",".join(kept)
+    return "".join(groups)
+
+
 def _separate_credits(author_string: str) -> str:
     """Turn a credit line into a list of people the split below can read."""
     author_string = _join_foreign_and(author_string)
@@ -541,7 +611,7 @@ def _separate_credits(author_string: str) -> str:
     author_string = AUTHOR_AS_TOLD_TO.sub("", author_string)
     author_string = AUTHOR_DATELINE.sub("", author_string)
     author_string = AUTHOR_LEGAL_COMMA.sub(" ", author_string)
-    author_string = AUTHOR_DESCRIPTION.sub("", author_string)
+    author_string = _drop_person_details(author_string)
     return AUTHOR_SEGMENT.sub(lambda match: _strip_job_title(match.group()), author_string)
 
 
@@ -586,8 +656,8 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
     # fix html entities
     if "&#" in author_string or "&amp;" in author_string:
         author_string = unescape(author_string)
-    # remove html tags
-    author_string = HTML_STRIP_TAGS.sub("", author_string)
+    # remove html tags; a line break separates the parts of a credit
+    author_string = HTML_STRIP_TAGS.sub("", AUTHOR_LINE_BREAK.sub(", ", author_string))
     # a byline may also credit visual contributors ("| Photography by X for WSJ")
     author_string = AUTHOR_VISUAL_CREDIT.sub("", author_string)
     author_string = _separate_credits(author_string)
@@ -598,6 +668,9 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_EMOJI_REMOVE.sub("", author)
         # remove @username
         author = AUTHOR_TWITTER.sub("", author)
+        # a website is no person: "Australia.so", "mirror.co.uk", "cricket.com.au"
+        if AUTHOR_DOMAIN_BYLINE.fullmatch(author):
+            continue
         # replace special characters with space
         author = trim(AUTHOR_REPLACE_JOIN.sub(" ", author))
         author = trim(AUTHOR_REMOVE_NICKNAME.sub("", author))
@@ -609,7 +682,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_REMOVE_PREPOSITION.sub("", author)
         author = AUTHOR_TRAILING_PREPOSITION.sub("", author)
         # a reported-speech verb scraped with the name ("Charlotte Trueman say")
-        author = AUTHOR_SPEECH_VERB.sub("", author)
+        author = trim(AUTHOR_SPEECH_VERB.sub("", author))
         # skip empty or improbably long strings, companies and sentences
         # simple heuristics, regex or vowel tests also possible
         if not author or (len(author) >= 50 and " " not in author and "-" not in author) or not _is_name(author):

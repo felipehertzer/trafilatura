@@ -458,3 +458,42 @@ def test_a_short_block_taken_before_leaves_the_guard_as_it_was():
     )
     _, text, _ = _extract(load_html(page("", body)), Extractor(output_format="txt", fast=True))
     assert "With school holidays" in text
+
+
+def test_byline_details_after_a_comma_describe_the_person():
+    # role, then the role's organisation
+    assert normalize_authors(None, "Lydia Edwards, Fashion historian, Edith Cowan University") == "Lydia Edwards"
+    assert normalize_authors(None, "Phillip Makowski, Marketing Director, Dematic Australia") == "Phillip Makowski"
+    assert normalize_authors(None, "Sean Crawford, Managing Director, North America, SMG") == "Sean Crawford"
+    assert normalize_authors(None, "Marlow Nickell, Co-founder and CEO, Grocery TV") == "Marlow Nickell"
+    # credentials, an organisation, a website and a programme part on their own
+    assert normalize_authors(None, "Chelsea Rae Bourgeois, RDN, LD") == "Chelsea Rae Bourgeois"
+    assert normalize_authors(None, "Kate Dore, CFP®, EA") == "Kate Dore"
+    assert normalize_authors(None, "Cynthia Lee, McGill University") == "Cynthia Lee"
+    assert normalize_authors(None, "Robert Jennings, InnerSelf.com") == "Robert Jennings"
+    assert normalize_authors(None, "Andrew Whitelaw, Episode 3") == "Andrew Whitelaw"
+    # a line break before the affiliation, and the city after it
+    assert normalize_authors(None, "Santosh Mehrotra <br> \nHigher School of Economics, Moscow") == "Santosh Mehrotra"
+
+
+def test_byline_list_and_joined_names_stay():
+    assert normalize_authors(None, "Sanj Patel, Sebastian Bugeja-Drinkell, Gabriel Rojas") == (
+        "Sanj Patel; Sebastian Bugeja-Drinkell; Gabriel Rojas"
+    )
+    assert normalize_authors(None, "Sarah Martin, Chief political correspondent and Paul Karp") == "Sarah Martin; Paul Karp"
+    assert normalize_authors(None, "Jane Doe, Editor, and John Roe") == "Jane Doe; John Roe"
+    # a surname that is a plural role word names a person
+    assert normalize_authors(None, "Jane Doe, Taylah Fellows") == "Jane Doe; Taylah Fellows"
+
+
+def test_byline_label_keeps_the_capitals_of_the_name():
+    assert normalize_authors(None, "Written By: EIN Presswire") == "EIN Presswire"
+
+
+def test_a_website_byline_is_no_person():
+    assert normalize_authors(None, "Australia.so") is None
+    assert normalize_authors(None, "mirror.co.uk") is None
+    assert normalize_authors(None, "Jane Doe; cricket.com.au") == "Jane Doe"
+    assert normalize_authors(None, "J.R.R. Tolkien") == "J R R Tolkien"
+    assert normalize_authors(None, "Dr.Smith") == "Dr Smith"
+    assert normalize_authors(None, "g.lynch") == "G Lynch"
