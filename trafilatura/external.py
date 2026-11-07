@@ -13,7 +13,13 @@ from lxml.etree import SubElement, _Element, strip_tags, tostring
 from lxml.html import HtmlElement
 
 # own
-from .htmlprocessing import convert_tags, prune_unwanted_nodes, tree_cleaning
+from .htmlprocessing import (
+    convert_tags,
+    prune_related_lists,
+    prune_trailing_calls,
+    prune_unwanted_nodes,
+    tree_cleaning,
+)
 from .justext_lite import HEADINGS, extract_paragraphs, tidy_spacing
 from .main_extractor import handle_image
 from .readability_lxml import Document as ReadabilityDocument  # fork
@@ -203,7 +209,11 @@ def justext_rescue(tree: HtmlElement, options: Extractor) -> tuple[_Element, str
 
 def sanitize_tree(tree: HtmlElement, options: Extractor) -> tuple[HtmlElement, str]:
     """Convert and sanitize the output from the generic algorithm (post-processing)"""
-    cleaned_tree = convert_markup(tree_cleaning(tree, options), options)
+    cleaned_tree = tree_cleaning(tree, options)
+    # the calls to action and related lists after the story, before links are stripped
+    prune_related_lists(cleaned_tree)
+    prune_trailing_calls(cleaned_tree, options.url)
+    cleaned_tree = convert_markup(cleaned_tree, options)
     return cleaned_tree, trim(" ".join(cleaned_tree.itertext()))
 
 
