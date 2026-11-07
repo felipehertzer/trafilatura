@@ -784,3 +784,58 @@ def test_a_sentence_holding_a_share_link_stays_in_the_baseline():
     body = f'<article><p>{PARAGRAPH}</p><p>{sentence} or <a href="https://t.me/share/url?url=x">Telegram</a>.</p></article>'
     _, text, _ = baseline(page(body=body))
     assert sentence in text
+
+
+# Investing News: the whole page column is the frame, and the story's own wrapper (div.widget) is named by
+# a discard token, so pruning every match would gut the frame and the guard used to keep all of it.
+def column(story_wrapper='class="widget post-partial"', extra=""):
+    story = "".join(
+        f"<p>{sentence} The company said drilling continues through the quarter at its flagship project.</p>"
+        for sentence in (
+            "Gran Tierra Energy today announced an operational and financial update for the quarter.",
+            "The Charapa Norte-1 well is producing at an average rate of 1,188 barrels of oil per day.",
+            "The Rose-1 well in Colombia is producing at an average rate of 305 barrels of oil per day.",
+            "The company bought back 15 million shares of common stock for 20 million dollars.",
+            "Exploration in the Oriente Basin of Ecuador produced oil from four independent prospects.",
+        )
+    )
+    return page(
+        body='<div class="main v-sep">'
+        '<div class="topbar"><ul><li><span>WORLD EDITION</span></li><li>Australia</li><li>North America</li></ul></div>'
+        f'<div {story_wrapper}><div class="widget__body clearfix"><p>The transaction would have created the '
+        "world's second-largest gold miner.</p></div>"
+        f'<div class="widget__body clearfix"><div class="body"><div class="body-description">{story}</div></div></div></div>'
+        '<div class="author__modal-wrapper"><p>Giann Liguid is a graduate of Ateneo De Manila University with an AB '
+        "in Interdisciplinary Studies.</p><p>Learn about our editorial policies.</p></div>"
+        '<div class="column__right"><div class="innform--press--releases--sidebar"><h3>Latest News</h3>'
+        "<p>Other company announces another drilling result in Nevada this week.</p></div></div>"
+        '<div class="alert-wrapper"><div role="dialog" class="alert-popup is-hidden"><h3>Alert Options</h3>'
+        "<p>No alert set</p></div></div>"
+        f"{extra}</div>"
+    )
+
+
+def test_page_chrome_beside_a_story_named_by_a_discard_token_goes():
+    text = bare_extraction(column(), include_comments=False, with_metadata=False).text
+    assert "Charapa Norte-1 well is producing" in text
+    assert "second-largest gold miner" in text
+    for chrome in ("WORLD EDITION", "Ateneo De Manila", "editorial policies", "Latest News", "Alert Options"):
+        assert chrome not in text
+
+
+def test_a_story_wrapper_named_like_chrome_stays():
+    text = bare_extraction(column(story_wrapper='class="mb-2 post--socialux"'), include_comments=False).text
+    assert "Charapa Norte-1 well is producing" in text
+    assert "WORLD EDITION" not in text
+
+
+def test_content_blocks_named_widget_all_stay():
+    # Elementor and watson keep content in several widget-classed blocks: none is chrome
+    blocks = "".join(
+        f'<div class="elementor-widget elementor-widget-text-editor"><p>{PARAGRAPH} Part {n} of the history '
+        "of the network and its founders, written by the editors.</p></div>"
+        for n in range(1, 5)
+    )
+    text = bare_extraction(page(body=f'<div class="main">{blocks}</div>'), include_comments=False).text
+    for n in range(1, 5):
+        assert f"Part {n} of the history" in text

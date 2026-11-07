@@ -706,7 +706,9 @@ def prune_unwanted_sections(
     "Rule-based deletion of targeted document sections"
     favor_precision = options.focus == "precision"
     # prune the rest
-    tree = prune_unwanted_nodes(tree, OVERALL_DISCARD_XPATH, with_backup=True, extracted_len=extracted_len)
+    tree = prune_unwanted_nodes(
+        tree, OVERALL_DISCARD_XPATH, with_backup=True, extracted_len=extracted_len, beside_content=True
+    )
     # decide if images are preserved
     if "graphic" not in potential_tags:
         tree = prune_unwanted_nodes(tree, DISCARD_IMAGE_ELEMENTS)

@@ -4,6 +4,8 @@ X-Path expressions used to extract or filter the main text content,
 and to extract metadata.
 """
 
+import re
+
 from lxml.etree import XPath
 
 REGEXP_NS = "http://exslt.org/regular-expressions"
@@ -315,6 +317,44 @@ _OVERALL_DISCARD_CLASS_TOKENS = (
     + _UI_META_CLASS_TOKENS
     + _MISC_CLASS_TOKENS
     + _LEGACY_SITE_CLASS_TOKENS
+)
+
+# The clear page chrome among those tokens: navigation and bars, sidebars, banners, breadcrumbs, author
+# boxes, footers, share and social rows, related stories, newsletters, tags, consent notices and ads. The
+# others (widget, meta, slide, embed, options ...) also name content wrappers on some sites. When the
+# over-pruning guard would keep a frame whole, prune_unwanted_nodes() still removes the clear chrome
+# beside the frame's text (htmlprocessing.prune_beside_content).
+CHROME_CLASS = re.compile(
+    _alt(
+        _SHARE_SOCIAL_ID_CLASS_TOKENS
+        + _NEWSLETTER_ID_CLASS_TOKENS
+        + _CONSENT_ID_CLASS_TOKENS
+        + _TAGS_ID_CLASS_TOKENS
+        + ("sidebar", "banner", "bread-?crumb")
+        + _AUTHOR_ID_CLASS_TOKENS
+        + _NAV_CLASS_TOKENS
+        + tuple(t for t in _AD_CLASS_TOKENS if t != "widget")
+        + _FOOTER_CLASS_TOKENS
+        + _AUTHOR_CLASS_TOKENS
+        + _SHARE_CLASS_TOKENS[:2]
+        + _TAGS_CLASS_TOKENS
+        + _CONSENT_CLASS_TOKENS
+        + _RELATED_CLASS_TOKENS
+    )
+)
+CHROME_ID = re.compile(
+    _alt(
+        _SHARE_SOCIAL_ID_CLASS_TOKENS
+        + _NEWSLETTER_ID_CLASS_TOKENS
+        + _TAGS_ID_CLASS_TOKENS
+        + ("sidebar", "banner", "bread-?crumb")
+        + _AUTHOR_ID_CLASS_TOKENS
+        + _FOOTER_ID_TOKENS
+        + _SHARE_ID_TOKENS
+        + _NAV_ID_TOKENS
+        + _RELATED_ID_TOKENS
+        + _AD_ID_TOKENS
+    )
 )
 
 OVERALL_DISCARD_XPATH = [
