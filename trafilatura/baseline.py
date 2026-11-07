@@ -172,6 +172,9 @@ def _collect_json_content(tree: HtmlElement) -> tuple[list[str], list[str]]:
 # rescues those pages. Measured: toolbars and site navigation hold at most 69 characters outside
 # links, swallowing ones 3,494 and more.
 _INTERFACE_MAX_TEXT = 200
+# a label left over by deleted controls, and where the walk up from it stops
+_LABEL_MAX_TEXT = 40
+_LABEL_STOP = {"article", "main", "body", "html"}
 
 
 def _drop_interface(tree: HtmlElement) -> None:
@@ -184,7 +187,21 @@ def _drop_interface(tree: HtmlElement) -> None:
         text = len(" ".join(elem.text_content().split()))
         links = sum(len(" ".join(a.text_content().split())) for a in elem.iter("a"))
         if text - links <= _INTERFACE_MAX_TEXT:
+            parent = elem.getparent()
             delete_element(elem)
+            _drop_lone_label(parent)
+
+
+def _drop_lone_label(elem: HtmlElement | None) -> None:
+    """A block left with nothing but a short label once its controls are gone ("Share This Quiz"
+    over a row of share buttons) is part of that interface: it goes too, and so does each
+    ancestor that holds nothing more."""
+    while elem is not None and elem.tag not in _LABEL_STOP:
+        if len(" ".join(elem.text_content().split())) > _LABEL_MAX_TEXT:
+            return
+        parent = elem.getparent()
+        delete_element(elem, keep_tail=False)
+        elem = parent
 
 
 def baseline(filecontent: HtmlInput) -> tuple[_Element, str, int]:
