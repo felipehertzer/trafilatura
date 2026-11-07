@@ -569,6 +569,50 @@ def handle_textelem(element: _Element, potential_tags: set[str], options: Extrac
     return new_element
 
 
+# Where an article ends on a page with no body frame: its share row, recommendation widget or
+# comments. Blocks recovered from the whole page after such a marker, and outside the region that
+# holds the story, are the page's furniture (Big News Network mastheads: the e-mail subscription
+# box and the news-release promo after the share row and the Taboola widget).
+ARTICLE_END_MARK = re.compile(
+    r"(?:^|[\s_-])share|sharethis|social|taboola|outbrain|(?:^|[\s_-])comments?(?:[\s_-]|$)|disqus", re.IGNORECASE
+)
+STORY_REGION_SHARE = 2 / 3
+
+
+def _article_end_marks(tree: HtmlElement, order: dict[_Element, int]) -> list[int]:
+    "Document positions of the elements that end an article, in order."
+    return sorted(
+        order[elem]
+        for elem in tree.iter("*")
+        if ARTICLE_END_MARK.search(elem.get("class") or "") or ARTICLE_END_MARK.search(elem.get("id") or "")
+    )
+
+
+def _drop_trailing_furniture(
+    result_body: _Element, recovered: list[tuple[_Element, int, list[_Element]]], order: dict[_Element, int], marks: list[int]
+) -> None:
+    """Remove the recovered blocks that come after the article's end, outside its region: the deepest
+    element holding two thirds of the recovered text."""
+    total = sum(len(_elem_text(block)) for block, _, _ in recovered)
+    if not total or not marks:
+        return
+    weight: dict[_Element, int] = {}
+    for block, _, ancestors in recovered:
+        for ancestor in ancestors:
+            weight[ancestor] = weight.get(ancestor, 0) + len(_elem_text(block))
+    candidates = [elem for elem, chars in weight.items() if chars >= STORY_REGION_SHARE * total]
+    if not candidates:
+        return
+    region = max(candidates, key=lambda elem: sum(1 for _ in elem.iterancestors()))
+    region_end = max(order.get(elem, -1) for elem in region.iter())
+    cut = next((mark for mark in marks if mark > region_end), None)
+    if cut is None:
+        return
+    for block, start, ancestors in recovered:
+        if start > cut and region not in ancestors:
+            result_body.remove(block)
+
+
 def recover_wild_text(
     tree: HtmlElement,
     result_body: _Element,
@@ -599,6 +643,11 @@ def recover_wild_text(
         )
     # prune; in fast mode (no external comparator to defer to) keep teaser-class blocks, some of
     # which are real content — this is the last-resort path after the confident extractor failed
+    # no frame was found: the blocks come from the whole page, so where the article ends matters
+    no_frame = len(result_body) == 0
+    order: dict[_Element, int] = {elem: index for index, elem in enumerate(tree.iter())} if no_frame else {}
+    marks = _article_end_marks(tree, order) if no_frame else []
+    recovered: list[tuple[_Element, int, list[_Element]]] = []
     search_tree = prune_unwanted_sections(tree, potential_tags, options, keep_teasers=options.fast)
     subelems = search_tree.xpath(search_expr)
     # dedup against the pre-main-pass snapshot: skip what the main pass already took -- exact
@@ -613,6 +662,7 @@ def recover_wild_text(
     for subelem in subelems:
         if (consumed and subelem in consumed) or any(a in handled for a in subelem.iterancestors()):
             continue
+        source = (order.get(subelem, -1), list(subelem.iterancestors())) if no_frame else (-1, [])
         processed = handle_textelem(subelem, potential_tags, options)
         if processed is None:
             continue
@@ -636,9 +686,13 @@ def recover_wild_text(
         if options.focus == "balanced" and processed.tag == "list":
             processed.set(DEFERRED_ATTR, "1")
         result_body.append(processed)
+        if no_frame:
+            recovered.append((processed, *source))
         if under_cap:
             existing += "\n" + (fragment or text)
         existing_elems.add(text)
+    if no_frame:
+        _drop_trailing_furniture(result_body, recovered, order, marks)
     return result_body
 
 

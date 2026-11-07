@@ -710,3 +710,51 @@ def test_the_site_menu_is_not_the_body_frame():
 def test_a_header_holding_the_page_is_no_chrome(body):
     text = bare_extraction(page(body=body), include_comments=False, with_metadata=False).text
     assert PARAGRAPH.strip() in text
+
+
+# A Big News Network masthead: no frame class, so the text is recovered from the whole page.
+STORY_SENTENCES = [
+    "NEW YORK, New York - U.S. stock markets were again sold off on Tuesday as the ceasefire deadline loomed.",
+    "The technology-heavy NASDAQ Composite led declines among the major U.S. benchmarks, falling 144 points.",
+    "The Dow Jones Industrial Average also suffered a triple-digit loss, shedding 292 points to close lower.",
+]
+
+
+def masthead(between="", tail_inside=""):
+    # a story of the usual length, far longer than the promos (the over-pruning guard keeps its frame)
+    markets = ["Tokyo", "Sydney", "Frankfurt", "London", "Paris", "Toronto", "Sao Paulo", "Mumbai", "Seoul"]
+    story = "".join(f"<p><span>{sentence}</span></p>" for sentence in STORY_SENTENCES) + "".join(
+        f"<p>In {market}, the benchmark index moved {index + 1}.{index} percent as investors weighed the outlook for "
+        f"interest rates, energy prices and the {market} currency over the coming {index + 2} weeks.</p>"
+        for index, market in enumerate(markets)
+    )
+    return page(
+        body='<div class="wrapper"><div class="container"><div class="left-section single">'
+        '<div class="world-new-section"><div class="banner-section"><h2>Stocks slide</h2><p>Lola<br>22 Apr 2026</p>'
+        f'<div class="banner-text"><div>{story}{between}{tail_inside}</div></div></div></div>'
+        '<div class="row collapse share-section"><div class="share"><h5><a href="#">Share article:</a></h5></div></div>'
+        '<div id="taboola-below-article-thumbnails"></div>'
+        '<div class="row collapse subscribe"><div class="subscribe-section"><h5><a href="#">Subscribe and Follow</a></h5>'
+        "<p>Get a daily dose of Example Sun news through our daily email, its complimentary and keeps you fully up "
+        'to date with world and business news as well.</p><form><input type="text" name="email">'
+        "<button>Subscribe Now</button></form></div></div>"
+        '<div class="row collapse news-releases"><div class="news-releases-text"><h4><a href="#">News RELEASES</a></h4>'
+        "<p>Publish news of your business, community or sports group by submitting a news release to Example Sun.</p>"
+        '<a href="/news-releases" class="more-info">More Information</a></div></div>'
+        "</div></div></div>"
+    )
+
+
+def test_promos_after_the_end_of_a_recovered_story_go():
+    text = bare_extraction(masthead(), include_comments=False, with_metadata=False).text
+    for sentence in STORY_SENTENCES:
+        assert sentence in text
+    assert "daily dose" not in text
+    assert "news release" not in text
+
+
+def test_story_text_after_an_inline_share_row_stays():
+    inline = '<div class="share-inline"><a href="#">Share</a></div>'
+    last = "Wall Street closed the session lower for a second straight day, traders said in New York on Tuesday."
+    text = bare_extraction(masthead(between=inline, tail_inside=f"<p>{last}</p>"), include_comments=False).text
+    assert last in text
