@@ -625,3 +625,53 @@ def test_a_related_list_inside_the_story_goes_with_its_label():
     assert "Related stories" not in text
     assert "Detours start on Monday" not in text
     assert text.endswith(LAST_WORDS)
+
+
+# A list article whose items keep their text inside the figure beside the image (BuzzFeed).
+ITEM_PROSE = [
+    "This texture spray recreates beachy hair without the dry crunchy feeling, and doubles as a light hair powder.",
+    "A leave-in conditioning spray that adds moisture, detangles and seals the cuticle after colour, every single day.",
+    "This balm melts into the skin with coconut and jojoba oil, and it is the one thing everybody asks to borrow.",
+]
+
+
+def figure_item(number, prose, credit="Example Photos / Getty Images"):
+    return (
+        f'<div class="subbuzz"><h2 class="subbuzz__title">{number}. Item {number}</h2>'
+        f'<figure class="subbuzz__media"><img src="https://img.example.com/{number}.jpg">'
+        f'<div class="subbuzz__figure-footer"><span class="subbuzz__attribution">{credit}</span>'
+        f'<div class="subbuzz__description"><p>{prose}</p><p>Buy it from Example Store for $4{number}.</p></div>'
+        "</div></figure></div>"
+    )
+
+
+def test_a_figures_own_prose_is_article_text():
+    items = "".join(figure_item(n, prose) for n, prose in enumerate(ITEM_PROSE, 1))
+    body = f'<main><article><div class="post_content"><h1>Gifts</h1><p>{PARAGRAPH * 2}</p>{items}</div></article></main>'
+    text = bare_extraction(page(body=body), include_comments=False, with_metadata=False).text
+    for number, prose in enumerate(ITEM_PROSE, 1):
+        assert prose in text
+        assert f"Buy it from Example Store for $4{number}." in text
+    assert "Getty Images" not in text
+
+
+@pytest.mark.parametrize(
+    "figure",
+    [
+        # a caption, a credit line and a quoted post are no prose of the figure's own
+        (
+            '<figure><img src="a.jpg"><figcaption><p>The new bridge, seen from the river at dusk on Friday evening, '
+            "shortly before the lights were switched on for the first time.</p></figcaption></figure>"
+        ),
+        '<figure><img src="a.jpg"><p>Photo: Example Photos</p></figure>',
+        (
+            '<figure class="tweet"><blockquote><p>The bridge looks amazing tonight, well done to everyone who '
+            "worked on it over the last three years!</p></blockquote></figure>"
+        ),
+    ],
+)
+def test_figure_captions_credits_and_quotes_still_go(figure):
+    body = f"<article><h1>Bridge</h1><p>{PARAGRAPH * 3}</p>{figure}<p>{PARAGRAPH}</p></article>"
+    text = bare_extraction(page(body=body), include_comments=False, with_metadata=False).text
+    for words in ("dusk", "Example Photos", "amazing"):
+        assert words not in text

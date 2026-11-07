@@ -142,6 +142,42 @@ def reveal_hidden_continuation(tree: HtmlElement) -> None:
         elem.attrib.pop("style", None)
 
 
+# A figure's own prose: list articles write each item's text beside its image, inside the figure
+# (BuzzFeed: figure > div.subbuzz__figure-footer > div.subbuzz__description > p). Figures are deleted
+# with their content when images are off, so such paragraphs take the figure's place first; its
+# media, captions, quotes and tables go with it. Only a figure holding a paragraph of prose counts:
+# a short credit line in a <p> is no reason to keep anything.
+FIGURE_PROSE_MIN_CHARS = 80
+_FIGURE_PROSE_EXCLUDED = {"figcaption", "blockquote", "table", "figure"}
+
+
+def _figure_paragraphs(figure: HtmlElement) -> list[HtmlElement]:
+    "The paragraphs of a figure that are its own text, not a caption, quote, table or nested figure."
+    paragraphs = []
+    for para in figure.iter("p"):
+        between = []
+        for ancestor in para.iterancestors():
+            if ancestor is figure:
+                break
+            between.append(ancestor.tag)
+        if not _FIGURE_PROSE_EXCLUDED.intersection(between) and trim(para.text_content()):
+            paragraphs.append(para)
+    return paragraphs
+
+
+def keep_figure_prose(tree: HtmlElement) -> None:
+    "Move the prose paragraphs of a figure out of it, in place, before the figure is discarded."
+    for figure in list(tree.iter("figure")):
+        parent = figure.getparent()
+        paragraphs = _figure_paragraphs(figure)
+        if parent is None or not any(len(trim(p.text_content())) >= FIGURE_PROSE_MIN_CHARS for p in paragraphs):
+            continue
+        index = parent.index(figure)
+        for offset, para in enumerate(paragraphs):
+            para.tail = None
+            parent.insert(index + offset, para)
+
+
 def tree_cleaning(tree: HtmlElement, options: Extractor) -> HtmlElement:
     "Prune the tree by discarding unwanted elements."
     # before the controls go: their hidden continuation would be discarded with them
@@ -171,6 +207,8 @@ def tree_cleaning(tree: HtmlElement, options: Extractor) -> HtmlElement:
         # which can no longer be told once <thead> is stripped
         for cell in tree.iterfind(".//thead/tr/td"):
             cell.tag = "th"
+    if "figure" in cleaning_list and not options.images:
+        keep_figure_prose(tree)
     if options.images:
         # Many websites have <img> inside <figure> or <picture> or <source> tag
         cleaning_list -= PRESERVE_IMG_CLEANING
