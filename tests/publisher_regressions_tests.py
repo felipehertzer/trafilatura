@@ -675,3 +675,38 @@ def test_figure_captions_credits_and_quotes_still_go(figure):
     text = bare_extraction(page(body=body), include_comments=False, with_metadata=False).text
     for words in ("dusk", "Example Photos", "amazing"):
         assert words not in text
+
+
+# The site menu in the page header (BuzzFeed): its container's class starts with "main", like a
+# main-content frame, and it holds the footer links and the privacy notice.
+SITE_MENU = (
+    '<header class="header"><div class="mainNavContainer"><section id="js-more-nav" role="dialog">'
+    "<div>Browse links</div><p>US residents can opt out of sales of personal data.</p>"
+    '<ul><li><a href="/press">Press</a></li><li><a href="/rss">RSS</a></li><li><a href="/privacy">Privacy</a></li></ul>'
+    "<p>© 2026 Example Media, Inc</p></section></div></header>"
+)
+
+
+def test_the_site_menu_is_not_the_body_frame():
+    body = SITE_MENU + f"<main><div><p>{PARAGRAPH}</p><p>Residents can cross on foot from Monday.</p></div></main>"
+    text = bare_extraction(page(body=body), include_comments=False, with_metadata=False).text
+    assert PARAGRAPH.strip() in text
+    assert "opt out" not in text
+    assert "Example Media" not in text
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # an unclosed header swallows the page, its h1 and the story with it
+        f'<header class="Fixed"><h1>Bridge opens</h1><div class="main-content"><p>{PARAGRAPH * 3}</p></div>',
+        # an article's own header holding its standfirst
+        (
+            f'<article><header class="entry-header"><h1>Bridge</h1><div class="entry-content"><p>{PARAGRAPH * 3}</p>'
+            "</div></header></article>"
+        ),
+    ],
+)
+def test_a_header_holding_the_page_is_no_chrome(body):
+    text = bare_extraction(page(body=body), include_comments=False, with_metadata=False).text
+    assert PARAGRAPH.strip() in text
