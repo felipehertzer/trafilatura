@@ -7,6 +7,7 @@ import pytest
 from lxml.html import fromstring
 
 from trafilatura import bare_extraction, extract_metadata
+from trafilatura.baseline import baseline
 from trafilatura.htmlprocessing import is_call_to_action, prune_trailing_calls
 from trafilatura.json_metadata import normalize_authors
 
@@ -758,3 +759,28 @@ def test_story_text_after_an_inline_share_row_stays():
     last = "Wall Street closed the session lower for a second straight day, traders said in New York on Tuesday."
     text = bare_extraction(masthead(between=inline, tail_inside=f"<p>{last}</p>"), include_comments=False).text
     assert last in text
+
+
+# The share bar under a BuzzFeed quiz: a heading over a group of share links (Bluesky, Reddit, Pinterest...)
+SHARE_BAR = (
+    '<div class="share-bar-bottom_shareBottom"><h3 class="share-bar-bottom_shareCta">Share This Quiz</h3>'
+    '<div role="group" aria-label="Share"><ul><li><a href="https://bsky.app/intent/compose?text=Quiz">Bluesky</a></li>'
+    '<li><a href="https://www.reddit.com/submit?url=https%3A%2F%2Fnews.example.com%2Fquiz">Reddit</a></li>'
+    '<li><a href="https://www.pinterest.com/pin/create/button/?url=x">Pinterest</a></li>'
+    '<li><a href="https://t.me/share/url?url=x">Telegram</a></li></ul></div></div>'
+)
+
+
+def test_a_share_bar_goes_with_its_label_in_the_baseline():
+    body = f"<article><p>{PARAGRAPH}</p><p>How many of these idioms can you finish?</p>{SHARE_BAR}</article>"
+    _, text, _ = baseline(page(body=body))
+    assert "How many of these idioms" in text
+    for words in ("Share This Quiz", "Bluesky", "Reddit", "Pinterest", "Telegram"):
+        assert words not in text
+
+
+def test_a_sentence_holding_a_share_link_stays_in_the_baseline():
+    sentence = "Readers can send the council their questions about the bridge through the form below"
+    body = f'<article><p>{PARAGRAPH}</p><p>{sentence} or <a href="https://t.me/share/url?url=x">Telegram</a>.</p></article>'
+    _, text, _ = baseline(page(body=body))
+    assert sentence in text

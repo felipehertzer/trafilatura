@@ -465,8 +465,8 @@ BASELINE_INTERFACE_XPATH = XPath(
     "|.//header[not(ancestor::article or ancestor::main)]"
     "|.//a[re:test(@class, '(?:^|[\\s_-])skip-?(?:link|to)', 'i')]"
     # share controls by link target: a mailto with no recipient, or a network's share/intent endpoint
-    "|.//a[re:test(@href, '^mailto:\\?|/(?:sharer?|shareArticle|intent/(?:tweet|post))(?:\\.php)?\\?"
-    "|whatsapp\\.com/send\\?', 'i')]",
+    "|.//a[re:test(@href, '^mailto:\\?|/(?:sharer?|shareArticle|intent/(?:tweet|post|compose)|share/url|submit|pin/create)"
+    "(?:\\.php)?\\?|whatsapp\\.com/send\\?', 'i')]",
     namespaces={"re": "http://exslt.org/regular-expressions"},
 )
 
