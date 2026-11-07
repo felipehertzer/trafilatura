@@ -8,7 +8,7 @@ from lxml.html import fromstring
 
 from trafilatura import bare_extraction, extract_metadata
 from trafilatura.baseline import baseline
-from trafilatura.htmlprocessing import is_call_to_action, prune_trailing_calls
+from trafilatura.htmlprocessing import is_call_to_action, prune_trailing_calls, reveal_hidden_continuation
 from trafilatura.json_metadata import normalize_authors
 
 PARAGRAPH = "The council confirmed on Saturday that the new bridge will open to traffic next month. "
@@ -852,3 +852,38 @@ def test_a_standfirst_before_a_recovered_story_stays():
     html = masthead().replace("<p>Lola<br>22 Apr 2026</p>", f"<p>Lola<br>22 Apr 2026</p><p>{lead}</p>")
     text = bare_extraction(html, include_comments=False, with_metadata=False).text
     assert lead in text
+
+
+# McPherson mastheads: the rest of the story waits, hidden, behind a notice a script replaces with it,
+# and part of it is hidden again inside, after an ad slot.
+LOCKED = [
+    "This is not our preferred choice, we do not want this, the president said at his annual news conference.",
+    "He said Russia had received a generally positive initial response to security proposals it handed over.",
+    "The ball is in their court, they should answer us with something, he said of the talks in Geneva.",
+]
+
+
+def locked_page(notice="<p>Hold tight - we're checking permissions before loading more content</p>"):
+    return page(
+        body='<main><article><div class="article-body"><div class="content">'
+        f"<div><p>{PARAGRAPH * 2}</p></div><div>{notice}</div>"
+        f'<div id="lockable-1" style="display:none;"><p>{LOCKED[0]}</p>'
+        "<div><script>googletag.cmd.push(function() { googletag.display('div-gpt-ad-MREC3'); });</script></div>"
+        f'<div style="display:none;"><p>{LOCKED[1]}</p><p>{LOCKED[2]}</p></div></div>'
+        "</div></div></article></main>"
+    )
+
+
+def test_the_story_behind_a_loading_notice_is_read_whole():
+    text = bare_extraction(locked_page(), include_comments=False, with_metadata=False).text
+    for sentence in LOCKED:
+        assert sentence in text
+    assert "Hold tight" not in text
+
+
+def test_a_hidden_block_behind_a_subscription_link_stays_hidden():
+    notice = '<p>Subscribers only: <a href="/subscribe">subscribe to keep reading</a></p>'
+    tree = fromstring(locked_page(notice))
+    reveal_hidden_continuation(tree)
+    assert tree.xpath("//div[@id='lockable-1']")[0].get("style") == "display:none;"
+    assert "Subscribers only" in tree.text_content()

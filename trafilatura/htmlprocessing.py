@@ -124,23 +124,32 @@ UNDO_MAX_WORDS = 50
 
 # The rest of an article that a "continue reading" control reveals: a hidden block, last in its
 # container, right after an element that is nothing but that control, holding article paragraphs
-# and preceded by the visible ones. Hidden blocks are otherwise discarded as page furniture.
+# and preceded by the visible ones. Hidden blocks are otherwise discarded as page furniture. The
+# control may also be a short status notice with no link or button that a script replaces with the
+# text (McPherson mastheads: "Hold tight - we're checking permissions before loading more content"
+# above div#lockable-1).
 HIDDEN_CONTINUATION_XPATH = XPath(
     """
     .//*[@hidden or contains(translate(@style, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ \t\r\n', 'abcdefghijklmnopqrstuvwxyz'),
     'display:none')][not(following-sibling::*)]
-    [preceding-sibling::*[1][self::button or (.//button and normalize-space() = normalize-space(.//button[1]))]]
+    [preceding-sibling::*[1][self::button or (.//button and normalize-space() = normalize-space(.//button[1]))
+    or (not(.//a) and not(.//button) and string-length(normalize-space()) > 0 and string-length(normalize-space()) < 100
+    and not(.//p[string-length(normalize-space()) > 80]))]]
     [count(.//p[string-length(normalize-space()) > 80]) >= 2]
-    [preceding-sibling::*//p[string-length(normalize-space()) > 80]]
+    [preceding-sibling::*[descendant-or-self::p[string-length(normalize-space()) > 80]]]
     """
 )
 
 
 def reveal_hidden_continuation(tree: HtmlElement) -> None:
-    "Un-hide the rest of an article kept behind a continue-reading control."
+    """Un-hide the rest of an article kept behind a continue-reading control. A notice that stands
+    in for the text until a script loads it goes: the text is there now (buttons go in cleaning)."""
     for elem in HIDDEN_CONTINUATION_XPATH(tree):
         elem.attrib.pop("hidden", None)
         elem.attrib.pop("style", None)
+        notice = elem.getprevious()
+        if notice is not None and notice.tag != "button" and not notice.xpath(".//button"):
+            delete_element(notice, keep_tail=False)
 
 
 # A figure's own prose: list articles write each item's text beside its image, inside the figure
