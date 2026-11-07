@@ -839,3 +839,16 @@ def test_content_blocks_named_widget_all_stay():
     text = bare_extraction(page(body=f'<div class="main">{blocks}</div>'), include_comments=False).text
     for n in range(1, 5):
         assert f"Part {n} of the history" in text
+
+
+def test_the_byline_line_before_a_recovered_story_goes():
+    text = bare_extraction(masthead(), include_comments=False, with_metadata=False).text
+    assert text.startswith(STORY_SENTENCES[0])
+    assert "22 Apr 2026" not in text
+
+
+def test_a_standfirst_before_a_recovered_story_stays():
+    lead = "Wall Street fell for a second day as the ceasefire deadline neared and oil prices climbed again."
+    html = masthead().replace("<p>Lola<br>22 Apr 2026</p>", f"<p>Lola<br>22 Apr 2026</p><p>{lead}</p>")
+    text = bare_extraction(html, include_comments=False, with_metadata=False).text
+    assert lead in text
