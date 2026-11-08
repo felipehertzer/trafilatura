@@ -190,13 +190,19 @@ def _drop_interface(tree: HtmlElement) -> None:
         if text - links <= _INTERFACE_MAX_TEXT:
             parent = elem.getparent()
             delete_element(elem)
-            _drop_lone_label(parent)
+            if not _is_choice(elem):
+                _drop_lone_label(parent)
+
+
+def _is_choice(elem: HtmlElement) -> bool:
+    "A radio button: one answer of a quiz or poll question, whose label is that answer's text."
+    return elem.tag == "input" and (elem.get("type") or "").lower() == "radio"
 
 
 def _drop_lone_label(elem: HtmlElement | None) -> None:
     """A block left with nothing but a short label once its controls are gone ("Share This Quiz"
     over a row of share buttons) is part of that interface: it goes too, and so does each
-    ancestor that holds nothing more."""
+    ancestor that holds nothing more. A radio button leaves its label: a quiz answer is text."""
     while elem is not None and elem.tag not in _LABEL_STOP:
         # a block holding media is content (a list item's title over its picture and share button)
         if len(" ".join(elem.text_content().split())) > _LABEL_MAX_TEXT or _MEDIA(elem):
