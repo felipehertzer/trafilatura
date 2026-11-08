@@ -8,10 +8,12 @@ from lxml.html import fromstring
 
 from trafilatura import bare_extraction, extract_metadata
 from trafilatura.baseline import baseline
+from trafilatura.external import _wraps_own_extraction
 from trafilatura.htmlprocessing import is_call_to_action, prune_trailing_calls, reveal_hidden_continuation
 from trafilatura.json_metadata import normalize_authors
 from trafilatura.justext_lite import extract_paragraphs
 from trafilatura.readability_lxml import Document as ReadabilityDocument
+from trafilatura.settings import Extractor
 
 PARAGRAPH = "The council confirmed on Saturday that the new bridge will open to traffic next month. "
 
@@ -939,3 +941,77 @@ def test_a_short_last_part_hidden_again_inside_the_story_is_read():
     text = bare_extraction(html, include_comments=False, with_metadata=False).text
     assert LOCKED[2] in text
     assert signature in text
+
+
+GUIDE_TOWNS = ["Patagonia", "Terlingua", "Taos", "Gunnison", "Escalante", "Cottonwood"]
+
+
+def guide_paragraph(day, town):
+    return (
+        f"Day {day} starts in {town}, a quiet ranching town where the road follows an old rail line past dry creeks, "
+        f"mesquite flats and a bar in {town} that still opens on weekends for the few travellers who stop. "
+    )
+
+
+def guide_item(day, town, trail):
+    return (
+        f"Hikers leaving {town} on day {day} reach summit trail number {trail} and its old fire lookout after a steady "
+        f"climb of {trail + 3} hours, with views across three ranges toward the border. "
+    )
+
+
+def test_headings_and_lists_between_recovered_paragraphs_stay():
+    # outsideonline.com road-trip guide: no body frame, so only the paragraphs are recovered, while readability
+    # holds the stops' headings and lists between them
+    stops = "".join(
+        f"<h2>{day}. Route: to {town}</h2><h3>Distance: {day * 90} miles</h3><p>{guide_paragraph(day, town)}</p>"
+        f"<h3>Adventures in {town}</h3><ul>"
+        + "".join(f"<li>{guide_item(day, town, trail)}</li>" for trail in range(3))
+        + "</ul>"
+        for day, town in enumerate(GUIDE_TOWNS, 1)
+    )
+    body = (
+        '<div class="article-template"><div class="body-content"><div>Published November 2, 2022 05:00AM</div></div>'
+        f'<div class="o-wrap"><p>Heading into the desert at dusk (Photo: Example/Agency)</p>'
+        f"<p>{guide_paragraph(0, 'Tucson')}</p>{stops}</div></div>"
+    )
+    text = bare_extraction(page(body=body), include_comments=False, with_metadata=False).text
+    assert "Route: to Taos" in text
+    assert "summit trail number 2" in text
+
+
+def own_body(paragraphs):
+    return fromstring("<div>" + "".join(f"<p>{text}</p>" for text in paragraphs) + "</div>")
+
+
+def wrap_check(paragraphs, algo_html):
+    algo_body = fromstring(f"<div>{algo_html}</div>")
+    own = " ".join(paragraphs)
+    return _wraps_own_extraction(own_body(paragraphs), algo_body, algo_body.text_content(), len(own), Extractor())
+
+
+def test_readability_wrapping_the_own_story_in_chrome_does_not_win():
+    paragraphs = [guide_paragraph(day, town) for day, town in enumerate(GUIDE_TOWNS)]
+    menu = "".join(f"<li>{section} news and features</li>" for section in ("World", "Sport", "Travel", "Opinion") * 10)
+    story = "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs)
+    assert wrap_check(paragraphs, f"<ul>{menu}</ul>{story}<ul>{menu}</ul>")
+
+
+def test_readability_holding_the_storys_headings_and_lists_between_the_own_paragraphs_wins():
+    paragraphs = [guide_paragraph(day, town) for day, town in enumerate(GUIDE_TOWNS)]
+    story = "".join(
+        f"<p>{paragraph}</p><h3>Adventures in {town}</h3><ul>"
+        + "".join(f"<li>{guide_item(day, town, trail)}</li>" for trail in range(3))
+        + "</ul>"
+        for (day, town), paragraph in zip(enumerate(GUIDE_TOWNS), paragraphs, strict=True)
+    )
+    assert not wrap_check(paragraphs, story)
+
+
+def test_a_caption_or_two_between_the_own_paragraphs_is_still_a_wrap():
+    paragraphs = [guide_paragraph(day, town) for day, town in enumerate(GUIDE_TOWNS)]
+    story = "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs[:3])
+    story += "<ul><li>Photo: Example/Agency</li></ul><h4>Advertisement</h4>"
+    story += "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs[3:])
+    menu = "".join(f"<li>{section} news and features</li>" for section in ("World", "Sport", "Travel") * 12)
+    assert wrap_check(paragraphs, f"<ul>{menu}</ul>{story}")
