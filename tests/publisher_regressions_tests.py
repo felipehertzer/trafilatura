@@ -1015,3 +1015,15 @@ def test_a_caption_or_two_between_the_own_paragraphs_is_still_a_wrap():
     story += "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs[3:])
     menu = "".join(f"<li>{section} news and features</li>" for section in ("World", "Sport", "Travel") * 12)
     assert wrap_check(paragraphs, f"<ul>{menu}</ul>{story}")
+
+
+def test_a_quiz_question_and_its_answers_stay_when_the_share_bar_goes_in_the_baseline():
+    answers = "".join(
+        f'<li><label><input type="radio" name="season" value="{season}">{season}</label></li>'
+        for season in ("Fall", "Winter", "Summer", "Spring")
+    )
+    question = f"<fieldset><legend>And finally, you drink it during...</legend><ul>{answers}</ul></fieldset>"
+    _, text, _ = baseline(page(body=f"<article><p>{PARAGRAPH}</p>{question}{SHARE_BAR}</article>"))
+    assert "you drink it during" in text
+    assert "Winter" in text
+    assert "Share This Quiz" not in text
