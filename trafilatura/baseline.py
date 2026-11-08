@@ -10,7 +10,7 @@ from copy import copy
 from html import unescape
 from typing import Any
 
-from lxml.etree import Element, SubElement, _Element
+from lxml.etree import Element, SubElement, XPath, _Element
 from lxml.html import HtmlElement, fragment_fromstring
 
 from .settings import BASELINE_INTERFACE_XPATH, BASIC_CLEAN_XPATH, DEDUPE_SCAN_CAP, MIN_DUPLICATE_LENGTH
@@ -175,6 +175,7 @@ _INTERFACE_MAX_TEXT = 200
 # a label left over by deleted controls, and where the walk up from it stops
 _LABEL_MAX_TEXT = 40
 _LABEL_STOP = {"article", "main", "body", "html"}
+_MEDIA = XPath(".//img|.//picture|.//video|.//figure|.//iframe")
 
 
 def _drop_interface(tree: HtmlElement) -> None:
@@ -197,7 +198,8 @@ def _drop_lone_label(elem: HtmlElement | None) -> None:
     over a row of share buttons) is part of that interface: it goes too, and so does each
     ancestor that holds nothing more."""
     while elem is not None and elem.tag not in _LABEL_STOP:
-        if len(" ".join(elem.text_content().split())) > _LABEL_MAX_TEXT:
+        # a block holding media is content (a list item's title over its picture and share button)
+        if len(" ".join(elem.text_content().split())) > _LABEL_MAX_TEXT or _MEDIA(elem):
             return
         parent = elem.getparent()
         delete_element(elem, keep_tail=False)

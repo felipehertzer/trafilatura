@@ -673,6 +673,9 @@ def recover_wild_text(
     for subelem in subelems:
         if (consumed and subelem in consumed) or any(a in handled for a in subelem.iterancestors()):
             continue
+        # the page's banner, menu or footer is no part of the article, as for the frames
+        if in_page_chrome(subelem):
+            continue
         source = (order.get(subelem, -1), list(subelem.iterancestors())) if no_frame else (-1, [])
         processed = handle_textelem(subelem, potential_tags, options)
         if processed is None:

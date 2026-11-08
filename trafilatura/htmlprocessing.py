@@ -141,15 +141,32 @@ HIDDEN_CONTINUATION_XPATH = XPath(
 )
 
 
+# a stand-in for the text: short, no link, no button, no paragraph of prose
+_STAND_IN_NOTICE = XPath(
+    "self::*[not(self::button) and not(.//a) and not(.//button) and string-length(normalize-space()) < 100"
+    " and not(.//p[string-length(normalize-space()) > 80])]"
+)
+_NESTED_CONTINUATION_XPATH = XPath(
+    """.//*[@hidden or contains(translate(@style, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ \t\r\n', 'abcdefghijklmnopqrstuvwxyz'),
+    'display:none')][not(following-sibling::*)][.//p]"""
+)
+
+
 def reveal_hidden_continuation(tree: HtmlElement) -> None:
     """Un-hide the rest of an article kept behind a continue-reading control. A notice that stands
     in for the text until a script loads it goes: the text is there now (buttons go in cleaning)."""
+    revealed: set[HtmlElement] = set()
     for elem in HIDDEN_CONTINUATION_XPATH(tree):
-        elem.attrib.pop("hidden", None)
-        elem.attrib.pop("style", None)
-        notice = elem.getprevious()
-        if notice is not None and notice.tag != "button" and not notice.xpath(".//button"):
-            delete_element(notice, keep_tail=False)
+        # its own last block hidden again is the rest of the same story (McPherson's #lockable-2)
+        for part in [elem, *_NESTED_CONTINUATION_XPATH(elem)]:
+            if part in revealed:
+                continue
+            revealed.add(part)
+            part.attrib.pop("hidden", None)
+            part.attrib.pop("style", None)
+            notice = part.getprevious()
+            if notice is not None and _STAND_IN_NOTICE(notice):
+                delete_element(notice, keep_tail=False)
 
 
 # A figure's own prose: list articles write each item's text beside its image, inside the figure
@@ -300,6 +317,11 @@ def prune_unwanted_nodes(
     return tree
 
 
+# the main text block must hold a story's worth of paragraphs: a frame left with a few lines once a
+# narrower one took the article (BuzzFeed's <article> after its post_content) is left as it was
+MAIN_BLOCK_MIN_TEXT = 500
+
+
 def _main_text_block(tree: HtmlElement) -> HtmlElement | None:
     "The element whose own paragraphs hold the most text: the frame's article body."
     weight: dict[HtmlElement, int] = {}
@@ -307,7 +329,10 @@ def _main_text_block(tree: HtmlElement) -> HtmlElement | None:
         parent = para.getparent()
         if parent is not None:
             weight[parent] = weight.get(parent, 0) + len(trim(para.text_content()))
-    return max(weight, key=weight.__getitem__) if weight else None
+    if not weight:
+        return None
+    main = max(weight, key=weight.__getitem__)
+    return main if weight[main] >= MAIN_BLOCK_MIN_TEXT else None
 
 
 def _class_name(elem: HtmlElement) -> str:

@@ -10,6 +10,8 @@ from trafilatura import bare_extraction, extract_metadata
 from trafilatura.baseline import baseline
 from trafilatura.htmlprocessing import is_call_to_action, prune_trailing_calls, reveal_hidden_continuation
 from trafilatura.json_metadata import normalize_authors
+from trafilatura.justext_lite import extract_paragraphs
+from trafilatura.readability_lxml import Document as ReadabilityDocument
 
 PARAGRAPH = "The council confirmed on Saturday that the new bridge will open to traffic next month. "
 
@@ -211,7 +213,6 @@ def test_infinite_scroll_without_permalink_is_still_removed():
 
 
 def test_select_options_do_not_steer_readability():
-    from trafilatura.readability_lxml import Document as ReadabilityDocument
 
     options = "".join(f"<option>Country number {i} with a long descriptive name</option>" for i in range(200))
     html = page("", f"<form><select>{options}</select></form><article><p>" + PARAGRAPH * 6 + "</p></article>")
@@ -887,3 +888,54 @@ def test_a_hidden_block_behind_a_subscription_link_stays_hidden():
     reveal_hidden_continuation(tree)
     assert tree.xpath("//div[@id='lockable-1']")[0].get("style") == "display:none;"
     assert "Subscribers only" in tree.text_content()
+
+
+# boredpanda: the story is rendered by a script; the page's own text is a newsletter modal (role=dialog)
+NEWSLETTER_MODAL = (
+    '<div id="more-categories-modal" class="modal fade" role="dialog"><div class="modal-dialog" role="document">'
+    + "".join(
+        f'<label class="category-option"><input type="checkbox" name="category[]"><div><span class="info">{name} '
+        f"The week's finest content carefully selected to bring you the best articles directly, once per week.</span>"
+        "</div></label>"
+        for name in ("Weekly", "Daily", "Funny", "Animals", "Politics")
+    )
+    + "</div></div>"
+)
+
+
+STORY_BLOCK = "".join(f"<p>{' '.join(LOCKED)} {sentence}</p>" for sentence in STORY_SENTENCES)
+
+
+def test_justext_leaves_a_dialog_out():
+    tree = fromstring(f"<html><body>{NEWSLETTER_MODAL}<div>{STORY_BLOCK}</div></body></html>")
+    texts = " ".join(text for text, *_ in extract_paragraphs(tree))
+    assert "finest content" not in texts
+    assert "annual news conference" in texts
+
+
+def test_recall_recovery_leaves_the_site_menu_out():
+    menu = (
+        '<header class="header"><div class="mainNavContainer"><div class="ccpaCopy">US residents can opt out of '
+        "sales of personal data.</div><div>Browse links</div><div>Press</div><div>Privacy</div></div></header>"
+    )
+    body = f'{menu}<main><div class="post"><p>How many of these songs do you know?</p></div></main>'
+    text = bare_extraction(page(body=body), include_comments=False, with_metadata=False).text
+    assert "opt out" not in text
+
+
+def test_a_list_item_with_its_share_button_keeps_its_title_in_the_baseline():
+    item = (
+        '<div class="subbuzz"><h2>1. Raya and the Last Dragon</h2><figure><img src="https://img.example.com/1.jpg">'
+        '</figure><div class="share"><a href="https://bsky.app/intent/compose?text=x">Bluesky</a></div></div>'
+    )
+    _, text, _ = baseline(page(body=f"<article><p>{PARAGRAPH}</p>{item}</article>"))
+    assert "Raya and the Last Dragon" in text
+
+
+def test_a_short_last_part_hidden_again_inside_the_story_is_read():
+    signature = "Louis Cook | Numurkah"
+    inner = f'<div style="display:none;"><p>{LOCKED[2]}</p><p>{signature}</p></div>'
+    html = locked_page().replace(f'<div style="display:none;"><p>{LOCKED[1]}</p><p>{LOCKED[2]}</p></div>', inner)
+    text = bare_extraction(html, include_comments=False, with_metadata=False).text
+    assert LOCKED[2] in text
+    assert signature in text
