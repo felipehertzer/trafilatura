@@ -155,7 +155,7 @@ AUTHOR_ROLE_WORDS = frozenset(
         "host", "contributor", "critic", "photographer", "spokesperson", "spokesman", "spokeswoman",
         "commentator", "analyst", "anchor", "director", "manager", "professor", "fellow", "lecturer",
         "researcher", "historian", "founder", "officer", "economist", "scientist", "president", "chair",
-        "adviser", "advisor", "consultant", "coordinator", "ceo", "cmo", "cto", "cfo", "coo",
+        "adviser", "advisor", "consultant", "coordinator", "teacher", "ceo", "cmo", "cto", "cfo", "coo",
     }
 )  # fmt: skip
 # After a comma, a role describes the person before it: "Tracy Neal, Open
@@ -229,7 +229,7 @@ AUTHOR_NOT_NAME_WORDS = frozenset(
     {
         "news", "desk", "team", "staff", "group", "media", "network", "solutions", "services", "systems",
         "labs", "university", "college", "school", "institute", "australia", "international", "online",
-        "magazine", "radio", "sports", "football",
+        "magazine", "radio", "sports", "football", "motoring",
     }
 )  # fmt: skip
 AUTHOR_EMOJI_REMOVE = re.compile(

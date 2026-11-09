@@ -465,6 +465,18 @@ _NOT_AUTHOR_BIO = """
         re:test(@class, '[Aa]uthor-?(?:[Nn]ame|[Tt]itle)')])])]
 """
 
+# A teaser for another story is no byline. A candidate holding that story's headline with its link (North East
+# Media's div.root.with-byline cards: span.teaser-keyword "Digital Editions" and h3.teaser-title > a gave the
+# author "Digital Editions Wangaratta Chronicle; Friday"), or sitting in a link around a card with a heading or a
+# title (refinery29's a > div.story-content > div.title ... div.story-meta > div.author), is the card. A heading
+# naming the author (author-name, author-title, rel="author") is the byline's own.
+_HEADING = "self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6"
+_NOT_TEASER = f"""
+        [not(descendant-or-self::*[{_HEADING}][descendant::a[@href] or ancestor::a[@href]]
+        [not(re:test(@class, '[Aa]uthor') or descendant::a[@rel='author' or re:test(@class, '[Aa]uthor')])])]
+        [not(ancestor::a[@href][descendant::*[{_HEADING} or re:test(@class, '(?:^|\\s)(?:title|headline)(?:\\s|$)')]])]
+"""
+
 # A meta item's label is no name, and an element whose whole text is that label holds no value:
 # the Bricks theme on 943.com.au and waggaslifefm.com puts its reading-time item in a block named
 # "fr-blog-post-delta__meta--author", the label p.fr-blog-post-delta__meta-title "Reading time" over
@@ -485,7 +497,8 @@ AUTHOR_XPATHS = [
         (@class and re:test(@class, 'author-?name|AuthorName|authorName'))]|//author)
         """
         + _NOT_AUTHOR_BIO
-        + _NOT_META_LABEL_ONLY,
+        + _NOT_META_LABEL_ONLY
+        + _NOT_TEASER,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
@@ -501,7 +514,8 @@ AUTHOR_XPATHS = [
         [not(re:test(@class, '(?:^|\\s)(?:hentry|status-publish)(?:\\s|$)'))]
         """
         + _NOT_AUTHOR_BIO
-        + _NOT_META_LABEL_ONLY,
+        + _NOT_META_LABEL_ONLY
+        + _NOT_TEASER,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
@@ -514,7 +528,8 @@ AUTHOR_XPATHS = [
         [not(re:test(@class, '(?:^|\\s)(?:hentry|status-publish)(?:\\s|$)'))]
         """
         + _NOT_AUTHOR_BIO
-        + _NOT_META_LABEL_ONLY,
+        + _NOT_META_LABEL_ONLY
+        + _NOT_TEASER,
         namespaces={"re": REGEXP_NS},
     ),
 ]

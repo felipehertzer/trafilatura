@@ -1177,3 +1177,34 @@ def test_no_credit_from_labels_brands_or_story_text():
     # past the story's first sentence, a "By" line is the text's
     late = f"<p>{PARAGRAPH}</p><p>By John Roe</p>"
     assert extract_metadata(story(late)).author is None
+
+
+def test_a_teaser_for_another_story_is_no_byline():
+    # North East Media (Atex): the "most popular" cards carry the class "with-byline"; the story has none
+    card = (
+        '<div class="jsx-2373710916 root with-byline"><div class="teaser"><div class="teaser-content">'
+        '<span class="teaser-keyword"><span class="keyword-text"><span>Digital Editions</span></span></span>'
+        '<h3 class="teaser-title"><a href="/digital-editions/wangaratta-chronicle-friday-6-november-2026-r8pwu5jy">'
+        "Wangaratta Chronicle, Friday, 6 November, 2026</a></h3></div></div></div>"
+    )
+    head = ld({"@context": "https://schema.org", "@type": "NewsArticle", "author": {"@type": "Person", "name": ""}})
+    title = '<h1 class="article-title">Probus clubs a hive of activity</h1>'
+    html = page(head, f"{title}<p>{PARAGRAPH * 3}</p><h2>Most popular stories</h2>{card}")
+    assert extract_metadata(html).author is None
+    # a card inside the link to its story (McPherson Media's most-read teasers, refinery29)
+    card = (
+        '<a class="teaser-link" href="/news/two-dead"><div class="teaser__container"><h3 class="teaser__title">'
+        'Two dead in crash</h3><div class="teaser__footer"><div class="teaser__author">By Ivy Jensen</div></div></div></a>'
+    )
+    assert extract_metadata(page(body=f"<h1>Basin issues need resolving</h1><p>{PARAGRAPH}</p>{card}")).author is None
+    # an author box whose heading links to the author's page is the byline's own
+    box = '<div class="author-box"><h4 class="author-name"><a href="/author/jane-doe">Jane Doe</a></h4></div>'
+    assert extract_metadata(page(body=f"<h1>Basin issues need resolving</h1><p>{PARAGRAPH}</p>{box}")).author == ("Jane Doe")
+
+
+def test_a_syndicator_or_a_role_after_the_comma_is_no_second_author():
+    # North East Media's motoring column and school pieces
+    assert normalize_authors(None, "By DEREK OGDEN, MARQUE MOTORING") == "Derek Ogden"
+    assert normalize_authors(None, "JENNY GOUGH, year three teacher, Mansfield Primary School") == "Jenny Gough"
+    # co-authors stay
+    assert normalize_authors(None, "Natalie Musumeci, Stephen Council") == "Natalie Musumeci; Stephen Council"
