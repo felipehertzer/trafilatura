@@ -1074,12 +1074,12 @@ def voice_fm_story(credit):
 
 
 def test_tag_links_in_the_byline_row_are_no_authors():
-    # the tags came out as the author "Emotions; Mums; Parenting Advice". The credit is the station's
-    # desk, in the vcard, the meta author and the JSON-LD; the writer's "By: Adriana Wales" is a story
-    # paragraph, not a byline
+    # the tags came out as the author "Emotions; Mums; Parenting Advice". The meta author and the JSON-LD
+    # credit the station's desk; the story opens with its writer's credit, "By: Adriana Wales"
     html = page(VOICE_FM_HEAD, voice_fm_story(VOICE_FM_DESK), url=VOICE_FM_URL)
-    assert extract_metadata(html).author == VOICE_FM_DESK
-    assert bare_extraction(html, url=VOICE_FM_URL, with_metadata=True).author == VOICE_FM_DESK
+    assert extract_metadata(html).author == "Adriana Wales"
+    assert bare_extraction(html, url=VOICE_FM_URL, with_metadata=True).author == "Adriana Wales"
+    # the byline row the page marks as one stays: the desk's vcard
     assert extract_metadata(page(body=voice_fm_story(VOICE_FM_DESK))).author == VOICE_FM_DESK
     # a person in the vcard was glued to the tags ("· Anzac Day · · · Laura Bennett")
     assert extract_metadata(page(body=voice_fm_story("Laura Bennett"))).author == "Laura Bennett"
@@ -1133,3 +1133,47 @@ def test_a_tag_link_inside_the_author_element_stays_the_byline():
     assert extract_metadata(page(body=byline + f"<p>{PARAGRAPH}</p>")).author == "Jane Doe"
     byline = '<p class="byline">By <span class="author vcard"><a href="/writer/jane-doe/" rel="tag">Jane Doe</a></span></p>'
     assert extract_metadata(page(body=byline + f"<p>{PARAGRAPH}</p>")).author == "Jane Doe"
+
+
+def story(credit_html, head="", headline="New Council to take Dorset out of neutral", tag="h1"):
+    return page(head, f"<{tag}>{headline}</{tag}>{credit_html}<p>{PARAGRAPH * 3}</p>")
+
+
+def test_the_credit_a_story_opens_with_names_its_writer():
+    # North Eastern Advertiser: the meta author is the production desk
+    desk = '<meta name="author" content="Production North-Eastern Advertiser">'
+    assert extract_metadata(story("<p><strong>By Rachel Williams</strong></p>", desk)).author == "Rachel Williams"
+    # its author block names the same desk, and the scraper's blacklist holds it
+    desk_block = '<div class="author">Production North-Eastern Advertiser</div><p><strong>By Rachel Williams</strong></p>'
+    blacklist = {"Production North-Eastern Advertiser"}
+    assert extract_metadata(story(desk_block), author_blacklist=blacklist).author == "Rachel Williams"
+    # Sydney Sun: the name over the dateline under the headline, in one block
+    head = '<meta property="og:title" content="CFTC allows single-stock perpetual futures to begin trading">'
+    title = "CFTC allows single-stock perpetual futures to begin trading"
+    credit = "<p>Anabelle Colaco <br>09 Nov 2026, 04:06 GMT+10 </p>"
+    assert extract_metadata(story(credit, head, title, "h2")).author == "Anabelle Colaco"
+    # a byline the page marks as one stays, and co-authors the meta adds are kept
+    marked = '<p class="byline">Jane Doe</p><p>By John Roe</p>'
+    assert extract_metadata(story(marked)).author == "Jane Doe"
+    both = '<meta name="author" content="Natalie Musumeci, Stephen Council">'
+    assert extract_metadata(story('<p>By <a href="/author/nm">Natalie Musumeci</a></p>', both)).author == (
+        "Natalie Musumeci; Stephen Council"
+    )
+
+
+def test_no_credit_from_labels_brands_or_story_text():
+    # a one-word credit over the dateline is a brand or an agency ("Packers", "ANI")
+    head = '<meta property="og:title" content="Packers host Eagles at Lambeau Field">'
+    credit = "<p>Packers <br>06 Nov 2025, 02:37 GMT+10 </p>"
+    assert extract_metadata(story(credit, head, "Packers host Eagles at Lambeau Field", "h2")).author is None
+    # a label over a labelled date ("Ort" and "Datum" on bsi.bund.de) is no credit
+    label = "<p>Ort Saarbrücken<br>Datum 28.01.2022</p>"
+    assert extract_metadata(story(label)).author is None
+    # a by-line linking only within the page ("No Comments") or to a handle beside a role names no one
+    empty = '<p><span class="author-leading">By</span> <a href="https://pakmag.com.au/gift-guide/#respond">No Comments</a></p>'
+    assert extract_metadata(story(empty)).author is None
+    handle = '<p>By <a href="/users/elanii">Elanii</a> Community Contributor</p>'
+    assert extract_metadata(story(handle)).author is None
+    # past the story's first sentence, a "By" line is the text's
+    late = f"<p>{PARAGRAPH}</p><p>By John Roe</p>"
+    assert extract_metadata(story(late)).author is None
