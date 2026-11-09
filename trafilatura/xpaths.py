@@ -472,6 +472,14 @@ _NOT_AUTHOR_BIO = """
         re:test(@class, '[Aa]uthor-?(?:[Nn]ame|[Tt]itle)')])])]
 """
 
+# A meta item's label is no name, and an element whose whole text is that label holds no value:
+# the Bricks theme on 943.com.au and waggaslifefm.com puts its reading-time item in a block named
+# "fr-blog-post-delta__meta--author", the label p.fr-blog-post-delta__meta-title "Reading time" over
+# a widget the page's script fills
+_NOT_META_LABEL_ONLY = """
+        [not(normalize-space(.) = normalize-space(.//*[re:test(@class, 'meta[-_]+(?:title|label)(?:\\s|$)')]))]
+"""
+
 # the order or depth of XPaths could be changed after exhaustive testing
 # Python ports of the author XPaths (re:test() callbacks are slow).
 # Unlike "//" XPaths, they skip document-level siblings of the root.
@@ -514,6 +522,18 @@ def _holds_author_bio(elem: HtmlElement) -> bool:
     )
 
 
+# A meta item's label is no name, and an element whose whole text is that label holds no value:
+# a block named "...__meta--author" holding the label p.entry__meta-title "Reading time"
+# over a widget the page's script fills
+AUTHOR_META_LABEL_CLASS = re.compile(r"meta[-_]+(?:title|label)(?:\s|$)")
+
+
+def _is_meta_label_only(elem: HtmlElement) -> bool:
+    "The element's whole text is the text of the first meta item label it holds."
+    label = next((sub for sub in elem.iterdescendants(Element) if AUTHOR_META_LABEL_CLASS.search(sub.get("class", ""))), None)
+    return label is not None and elem.text_content().split() == label.text_content().split()
+
+
 def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
     "Specific and almost specific author markers."
     return [
@@ -530,6 +550,7 @@ def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
             or AUTHOR_CLASS_SPECIFIC.search(elem.get("class", ""))
         )
         and not _holds_author_bio(elem)
+        and not _is_meta_label_only(elem)
     ]
 
 
@@ -546,6 +567,7 @@ def _author_generic(tree: HtmlElement) -> list[HtmlElement]:
         )
         and not AUTHOR_POST_CONTAINER.search(elem.get("class", ""))
         and not _holds_author_bio(elem)
+        and not _is_meta_label_only(elem)
     ]
 
 
@@ -562,6 +584,7 @@ def _author_any(tree: HtmlElement) -> list[HtmlElement]:
         )
         and not AUTHOR_POST_CONTAINER.search(elem.get("class", ""))
         and not _holds_author_bio(elem)
+        and not _is_meta_label_only(elem)
     ]
 
 
