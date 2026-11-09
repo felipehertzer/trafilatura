@@ -540,6 +540,19 @@ AUTHOR_DISCARD_XPATHS = [
         """.//*[re:test(@class, '(?:^|\\s)(?:cat|tags?)-links(?:\\s|$)')]""",
         namespaces={"re": REGEXP_NS},
     ),
+    XPath(
+        # a link the page marks as a tag (rel="tag", WordPress's rel="category tag") names a topic:
+        # "Articles · emotions · parenting advice" beside the credit in 929voice.fm's p.byline. WordPress
+        # marks the terms of every taxonomy so, a byline taxonomy too: a term link inside the element
+        # the page marks as the author (rel or itemprop "author", hAtom's class "author", an author-name
+        # class) is the name (elpais.cr's a.tdb-author-name > a[rel=tag] "Elpais.cr")
+        """
+        .//*[re:test(@rel, '(?:^|\\s)tag(?:\\s|$)', 'i')][not(ancestor-or-self::*[
+        re:test(@rel, '(?:^|\\s)author(?:\\s|$)', 'i') or contains(@itemprop, 'author') or
+        re:test(@class, '(?:^|\\s)author(?:\\s|$)|[Aa]uthor-?[Nn]ame')])]
+        """,
+        namespaces={"re": REGEXP_NS},
+    ),
     XPath("//time|//figure|//script|//style"),
 ]
 

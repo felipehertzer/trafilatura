@@ -1027,3 +1027,72 @@ def test_a_quiz_question_and_its_answers_stay_when_the_share_bar_goes_in_the_bas
     assert "you drink it during" in text
     assert "Winter" in text
     assert "Share This Quiz" not in text
+
+
+# 929voice.fm, trimmed (life1051.org.au, riverlandlife.org.au, waggaslifefm.com, 943.com.au, pulse941.com.au and
+# 1035fm.com.au run the same theme): the byline row holds the date, the category, the tags and the vcard credit
+VOICE_FM_URL = "https://www.929voice.fm/news/what-it-means-to-be-an-emotionally-available-parent/"
+VOICE_FM_DESK = "92.9 Voice FM Contributors"
+VOICE_FM_HEAD = f'<meta name="author" content="{VOICE_FM_DESK}" />' + ld(
+    {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Article",
+                "author": {"name": VOICE_FM_DESK, "@id": "https://www.929voice.fm/#/schema/person/ea36ee5d"},
+                "headline": "What It Means to be An Emotionally Available Parent",
+                "keywords": ["Articles", "emotions", "mums at the table", "parenting advice"],
+                "articleSection": ["Parenting"],
+            },
+            {"@type": "Person", "@id": "https://www.929voice.fm/#/schema/person/ea36ee5d", "name": VOICE_FM_DESK},
+        ],
+    }
+)
+
+
+def voice_fm_story(credit):
+    tags = " &middot; ".join(
+        f'<a href="https://www.929voice.fm/news/tag/{slug}/" rel="tag">{name}</a>'
+        for slug, name in (
+            ("articles", "Articles"),
+            ("emotions", "emotions"),
+            ("mums-at-the-table", "mums at the table"),
+            ("parenting-advice", "parenting advice"),
+        )
+    )
+    byline = (
+        '<p class="byline"><span>9 November 2026</span><span><a href="https://www.929voice.fm/news/category/parenting/"'
+        f' rel="category tag">Parenting</a></span><span>{tags}</span><span class="author vcard">{credit} </span></p>'
+    )
+    return (
+        '<article class="post type-post status-publish hentry category-parenting tag-articles tag-emotions">'
+        '<section class="article-header"><h1 class="post-heading">What It Means to be An Emotionally Available'
+        f' Parent</h1>{byline}</section><main role="main"><section class="entry-content" itemprop="text">'
+        '<p>By: <a rel="nofollow noopener" href="http://tag/mums-at-the-table">Adriana Wales</a></p>'
+        f"<p>{PARAGRAPH * 3}</p><p>{PARAGRAPH * 3}</p></section></main></article>"
+    )
+
+
+def test_tag_links_in_the_byline_row_are_no_authors():
+    # the tags came out as the author "Emotions; Mums; Parenting Advice". The credit left is the
+    # station's desk, which normalize_authors reads as no name (also in the meta author and JSON-LD),
+    # and the writer's "By: Adriana Wales" is a story paragraph, not a byline: no author
+    html = page(VOICE_FM_HEAD, voice_fm_story(VOICE_FM_DESK), url=VOICE_FM_URL)
+    assert extract_metadata(html).author is None
+    assert bare_extraction(html, url=VOICE_FM_URL, with_metadata=True).author is None
+    # a person in the vcard was glued to the tags ("· Anzac Day · · · Laura Bennett")
+    assert extract_metadata(page(body=voice_fm_story("Laura Bennett"))).author == "Laura Bennett"
+
+
+def test_a_tag_link_inside_the_author_element_stays_the_byline():
+    # elpais.cr: WordPress marks a byline taxonomy's terms rel="tag" too
+    byline = (
+        '<div class="tdb-author-name-wrap"><span class="tdb-author-by">Por</span> <a class="tdb-author-name"'
+        ' href="https://www.elpais.cr/author/csalazar/"><a href="https://www.elpais.cr/byline/elpais-cr/" rel="tag">'
+        "Elpais.cr</a></a></div>"
+    )
+    assert extract_metadata(page(body=byline + f"<p>{PARAGRAPH}</p>")).author == "Elpais cr"
+    byline = '<p class="byline">By <a href="/tag/jane-doe/" rel="author tag">Jane Doe</a></p>'
+    assert extract_metadata(page(body=byline + f"<p>{PARAGRAPH}</p>")).author == "Jane Doe"
+    byline = '<p class="byline">By <span class="author vcard"><a href="/writer/jane-doe/" rel="tag">Jane Doe</a></span></p>'
+    assert extract_metadata(page(body=byline + f"<p>{PARAGRAPH}</p>")).author == "Jane Doe"
