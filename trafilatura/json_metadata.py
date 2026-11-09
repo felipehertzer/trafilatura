@@ -103,8 +103,12 @@ AUTHOR_VISUAL_CREDIT = re.compile(
 )
 AUTHOR_WORD_START = re.compile(r"(\w)(\w*)")
 AUTHOR_REMOVE_NUMBERS = re.compile(r"\d.+?$")
+# a decimal number with words after it, a radio station's frequency ("92.9 Voice FM"); a date has two
+# dots ("18.10.2019") and a time no space before its letters ("2.30pm")
+AUTHOR_FREQUENCY = re.compile(r"(?<![\d.])\d+\.\d+(?![.\d])\s+[^\W\d_]")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
-AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
+# a dot joins a handle's parts ("john.smith"), a decimal point stays ("Life 105.1")
+AUTHOR_REPLACE_JOIN = re.compile(r"[_+]|(?<!\d)\.|\.(?!\d)")
 # a nickname in quotes or brackets; an apostrophe inside a word ("CNN's Dana O'Neil") is no quote
 AUTHOR_REMOVE_NICKNAME = re.compile(r'["“({\[][^"”]+?[‘’"”\')\]}]|(?<![^\W\d_])[‘’\'][^"”]+?[‘’"”\')\]}](?![^\W\d_])')
 AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
@@ -678,7 +682,10 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_REMOVE_SPECIAL.sub("", author)
         author = AUTHOR_PREFIX.sub("", author)
         author = _drop_glued_label(author)
-        author = AUTHOR_REMOVE_NUMBERS.sub("", author)
+        # a number ends the name ("Ross Guest 1 October 2025"), but a frequency followed by words
+        # belongs to a station's name ("Life 105.1 Contributors" gave "Life")
+        if not AUTHOR_FREQUENCY.search(author):
+            author = AUTHOR_REMOVE_NUMBERS.sub("", author)
         author = AUTHOR_REMOVE_PREPOSITION.sub("", author)
         author = AUTHOR_TRAILING_PREPOSITION.sub("", author)
         # a reported-speech verb scraped with the name ("Charlotte Trueman say")
@@ -687,8 +694,9 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         # simple heuristics, regex or vowel tests also possible
         if not author or (len(author) >= 50 and " " not in author and "-" not in author) or not _is_name(author):
             continue
-        # title case; an all-capitals byline ("VANESSA PAIGE CHELVAN") is a style
-        if not author[0].isupper():
+        # title case; an all-capitals byline ("VANESSA PAIGE CHELVAN") is a style. The first letter
+        # decides: a station's frequency leads "92.9 Voice FM Contributors"
+        if not AUTHOR_WORD.findall(author)[0][0].isupper():
             author = author.title()
         elif " " in author and author.isupper():
             author = AUTHOR_WORD_START.sub(lambda m: m[1] + m[2].lower(), author)

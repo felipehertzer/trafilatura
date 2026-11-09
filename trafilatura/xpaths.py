@@ -465,6 +465,14 @@ _NOT_AUTHOR_BIO = """
         re:test(@class, '[Aa]uthor-?(?:[Nn]ame|[Tt]itle)')])])]
 """
 
+# A meta item's label is no name, and an element whose whole text is that label holds no value:
+# the Bricks theme on 943.com.au and waggaslifefm.com puts its reading-time item in a block named
+# "fr-blog-post-delta__meta--author", the label p.fr-blog-post-delta__meta-title "Reading time" over
+# a widget the page's script fills
+_NOT_META_LABEL_ONLY = """
+        [not(normalize-space(.) = normalize-space(.//*[re:test(@class, 'meta[-_]+(?:title|label)(?:\\s|$)')]))]
+"""
+
 # the order or depth of XPaths could be changed after exhaustive testing
 AUTHOR_XPATHS = [
     XPath(
@@ -476,7 +484,8 @@ AUTHOR_XPATHS = [
         @data-testid='AuthorCard' or @data-testid='AuthorURL' or
         (@class and re:test(@class, 'author-?name|AuthorName|authorName'))]|//author)
         """
-        + _NOT_AUTHOR_BIO,
+        + _NOT_AUTHOR_BIO
+        + _NOT_META_LABEL_ONLY,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
@@ -491,7 +500,8 @@ AUTHOR_XPATHS = [
         (@class and re:test(@class, 'author|channel-name|zuozhe|bianji|xiaobian|submitted-by|posted-by|journalist-name'))]
         [not(re:test(@class, '(?:^|\\s)(?:hentry|status-publish)(?:\\s|$)'))]
         """
-        + _NOT_AUTHOR_BIO,
+        + _NOT_AUTHOR_BIO
+        + _NOT_META_LABEL_ONLY,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
@@ -503,7 +513,8 @@ AUTHOR_XPATHS = [
         (@class and re:test(@class, '[Aa]uthor|screenname|writer|[Bb]yline'))]
         [not(re:test(@class, '(?:^|\\s)(?:hentry|status-publish)(?:\\s|$)'))]
         """
-        + _NOT_AUTHOR_BIO,
+        + _NOT_AUTHOR_BIO
+        + _NOT_META_LABEL_ONLY,
         namespaces={"re": REGEXP_NS},
     ),
 ]

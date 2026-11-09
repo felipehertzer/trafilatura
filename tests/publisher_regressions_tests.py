@@ -1074,14 +1074,51 @@ def voice_fm_story(credit):
 
 
 def test_tag_links_in_the_byline_row_are_no_authors():
-    # the tags came out as the author "Emotions; Mums; Parenting Advice". The credit left is the
-    # station's desk, which normalize_authors reads as no name (also in the meta author and JSON-LD),
-    # and the writer's "By: Adriana Wales" is a story paragraph, not a byline: no author
+    # the tags came out as the author "Emotions; Mums; Parenting Advice". The credit is the station's
+    # desk, in the vcard, the meta author and the JSON-LD; the writer's "By: Adriana Wales" is a story
+    # paragraph, not a byline
     html = page(VOICE_FM_HEAD, voice_fm_story(VOICE_FM_DESK), url=VOICE_FM_URL)
-    assert extract_metadata(html).author is None
-    assert bare_extraction(html, url=VOICE_FM_URL, with_metadata=True).author is None
+    assert extract_metadata(html).author == VOICE_FM_DESK
+    assert bare_extraction(html, url=VOICE_FM_URL, with_metadata=True).author == VOICE_FM_DESK
+    assert extract_metadata(page(body=voice_fm_story(VOICE_FM_DESK))).author == VOICE_FM_DESK
     # a person in the vcard was glued to the tags ("· Anzac Day · · · Laura Bennett")
     assert extract_metadata(page(body=voice_fm_story("Laura Bennett"))).author == "Laura Bennett"
+
+
+def bricks_meta_row(label, value):
+    # 943.com.au and waggaslifefm.com (Bricks theme), trimmed
+    return (
+        '<div class="brxe-block fr-blog-post-delta__meta-wrapper"><div class="brxe-div fr-blog-post-delta__meta--author'
+        f' fr-blog-post-delta__meta"><p class="brxe-text-basic fr-blog-post-delta__meta-title">{label}</p>'
+        f'<div class="brxe-div fr-blog-post-delta__author">{value}</div></div><div class="brxe-div'
+        ' fr-blog-post-delta__meta--date fr-blog-post-delta__meta"><p class="brxe-text-basic'
+        ' fr-blog-post-delta__meta-title">Published on</p><time class="brxe-text-basic fr-blog-post-delta__date"'
+        ' datetime="November 6, 2026">November 6, 2026</time></div></div>'
+    )
+
+
+def test_a_meta_items_label_without_its_value_is_no_author():
+    widget = (
+        '<div data-script-id="aoyhxx" class="brxe-post-reading-time" data-suffix=" minutes"'
+        ' data-calculation-method="words" data-wpm="200"></div>'
+    )
+    story = f"<h1>Strong Until I Wasn't</h1>{bricks_meta_row('Reading time', widget)}<p>{PARAGRAPH * 3}</p>"
+    assert extract_metadata(page(body=story)).author is None
+    # the same row holding a name
+    story = f"<h1>Strong Until I Wasn't</h1>{bricks_meta_row('Written by', 'Jane Doe')}<p>{PARAGRAPH * 3}</p>"
+    assert extract_metadata(page(body=story)).author == "Jane Doe"
+
+
+def test_a_stations_frequency_stays_in_its_credit():
+    # life1051.org.au's vcard was cut at the number: "Life", and "Parenting Life" with a tag before it
+    assert normalize_authors(None, "Life 105.1 Contributors") == "Life 105.1 Contributors"
+    assert extract_metadata(page(body=voice_fm_story("Life 105.1 Contributors"))).author == "Life 105.1 Contributors"
+    assert normalize_authors(None, "92.9 Voice FM Contributors") == "92.9 Voice FM Contributors"
+    # a number after the name still ends it: a date, a time, a reading time
+    assert normalize_authors(None, "Ross Guest 1 October 2025 22 1") == "Ross Guest"
+    assert normalize_authors(None, "von Ulrike 18.10.2019 16:06 Uhr") == "Ulrike"
+    assert normalize_authors(None, "Jane Doe 2.30pm") == "Jane Doe"
+    assert normalize_authors(None, "Sunrise The Nightly 2 Min Read Updated Comments") == "Sunrise The Nightly"
 
 
 def test_a_tag_link_inside_the_author_element_stays_the_byline():
