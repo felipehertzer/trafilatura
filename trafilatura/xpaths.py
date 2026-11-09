@@ -607,10 +607,37 @@ def _author_timestamps(tree: HtmlElement) -> list[HtmlElement]:
     ]
 
 
+AUTHOR_REL_TAG = re.compile(r"(?:^|\s)tag(?:\s|$)", re.IGNORECASE)
+AUTHOR_REL_AUTHOR = re.compile(r"(?:^|\s)author(?:\s|$)", re.IGNORECASE)
+AUTHOR_MARKED_CLASS = re.compile(r"(?:^|\s)author(?:\s|$)|[Aa]uthor-?[Nn]ame")
+
+
+def _marks_author(elem: HtmlElement) -> bool:
+    "The page marks the element as the author."
+    return bool(
+        AUTHOR_REL_AUTHOR.search(elem.get("rel", ""))
+        or "author" in elem.get("itemprop", "")
+        or AUTHOR_MARKED_CLASS.search(elem.get("class", ""))
+    )
+
+
+def _author_tag_links(tree: HtmlElement) -> list[HtmlElement]:
+    """A link the page marks as a tag (rel="tag", rel="category tag") names a topic, unless it is
+    inside the element the page marks as the author: a byline taxonomy's terms are tags too."""
+    return [
+        elem
+        for elem in tree.iter(Element)
+        if AUTHOR_REL_TAG.search(elem.get("rel", ""))
+        and not _marks_author(elem)
+        and not any(_marks_author(parent) for parent in elem.iterancestors())
+    ]
+
+
 AUTHOR_XPATHS: list[Callable[[HtmlElement], list[HtmlElement]]] = [_author_specific, _author_generic, _author_any]
 AUTHOR_DISCARD_XPATHS: list[Callable[[HtmlElement], Any]] = [
     _author_discard,
     _author_timestamps,
+    _author_tag_links,
     XPath("//time|//figure|//script|//style"),
 ]
 
