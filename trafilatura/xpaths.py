@@ -472,6 +472,18 @@ _NOT_AUTHOR_BIO = """
         re:test(@class, '[Aa]uthor-?(?:[Nn]ame|[Tt]itle)')])])]
 """
 
+# A teaser for another story is no byline. A candidate holding that story's headline with its link (North East
+# Media's div.root.with-byline cards: span.teaser-keyword "Digital Editions" and h3.teaser-title > a gave the
+# author "Digital Editions Wangaratta Chronicle; Friday"), or sitting in a link around a card with a heading or a
+# title (refinery29's a > div.story-content > div.title ... div.story-meta > div.author), is the card. A heading
+# naming the author (author-name, author-title, rel="author") is the byline's own.
+_HEADING = "self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6"
+_NOT_TEASER = f"""
+        [not(descendant-or-self::*[{_HEADING}][descendant::a[@href] or ancestor::a[@href]]
+        [not(re:test(@class, '[Aa]uthor') or descendant::a[@rel='author' or re:test(@class, '[Aa]uthor')])])]
+        [not(ancestor::a[@href][descendant::*[{_HEADING} or re:test(@class, '(?:^|\\s)(?:title|headline)(?:\\s|$)')]])]
+"""
+
 # A meta item's label is no name, and an element whose whole text is that label holds no value:
 # the Bricks theme on 943.com.au and waggaslifefm.com puts its reading-time item in a block named
 # "fr-blog-post-delta__meta--author", the label p.fr-blog-post-delta__meta-title "Reading time" over
@@ -534,6 +546,34 @@ def _is_meta_label_only(elem: HtmlElement) -> bool:
     return label is not None and elem.text_content().split() == label.text_content().split()
 
 
+# A teaser for another story is no byline. A candidate holding that story's headline with its link,
+# or sitting in a link around a card with a heading or a title, is the card. A heading naming the
+# author (an author class, rel="author") is the byline's own.
+AUTHOR_MENTION = re.compile("[Aa]uthor")
+TEASER_TITLE_CLASS = re.compile(r"(?:^|\s)(?:title|headline)(?:\s|$)")
+
+
+def _is_teaser(elem: HtmlElement) -> bool:
+    "The element holds a linked heading not naming the author, or sits in a link around a heading or a title."
+    for heading in elem.iter(*_HEADINGS):
+        links = list(heading.iterdescendants("a"))
+        linked = any("href" in link.attrib for link in links) or any(
+            "href" in link.attrib for link in heading.iterancestors("a")
+        )
+        names_author = AUTHOR_MENTION.search(heading.get("class", "")) or any(
+            link.get("rel") == "author" or AUTHOR_MENTION.search(link.get("class", "")) for link in links
+        )
+        if linked and not names_author:
+            return True
+    return any(
+        "href" in link.attrib
+        and any(
+            sub.tag in _HEADINGS or TEASER_TITLE_CLASS.search(sub.get("class", "")) for sub in link.iterdescendants(Element)
+        )
+        for link in elem.iterancestors("a")
+    )
+
+
 def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
     "Specific and almost specific author markers."
     return [
@@ -551,6 +591,7 @@ def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
         )
         and not _holds_author_bio(elem)
         and not _is_meta_label_only(elem)
+        and not _is_teaser(elem)
     ]
 
 
@@ -568,6 +609,7 @@ def _author_generic(tree: HtmlElement) -> list[HtmlElement]:
         and not AUTHOR_POST_CONTAINER.search(elem.get("class", ""))
         and not _holds_author_bio(elem)
         and not _is_meta_label_only(elem)
+        and not _is_teaser(elem)
     ]
 
 
@@ -585,6 +627,7 @@ def _author_any(tree: HtmlElement) -> list[HtmlElement]:
         and not AUTHOR_POST_CONTAINER.search(elem.get("class", ""))
         and not _holds_author_bio(elem)
         and not _is_meta_label_only(elem)
+        and not _is_teaser(elem)
     ]
 
 
