@@ -1547,3 +1547,19 @@ def test_normalize_authors_datelines(byline, expected):
 def test_normalize_authors_credit_prefixes(byline, expected):
     "Credit prefixes are removed without turning their words into extra authors."
     assert normalize_authors(None, byline) == expected
+
+
+@pytest.mark.parametrize(
+    "author_string, expected",
+    [
+        ("Clara Roe e Isabel Doe", "Clara Roe; Isabel Doe"),
+        ("Isabel Doe y Clara Roe", "Isabel Doe; Clara Roe"),
+        ("Jean Dupont et Marie Durand", "Jean Dupont; Marie Durand"),
+        ("Ana Roe, Clara Roe e Isabel Doe", "Ana Roe; Clara Roe; Isabel Doe"),
+        # "e" also joins the parts of a Portuguese surname
+        ("João e Silva", "João e Silva"),
+    ],
+)
+def test_normalize_authors_foreign_and(author_string, expected):
+    "the Spanish, Portuguese and French words for 'and' separate two full names"
+    assert normalize_authors(None, author_string) == expected
