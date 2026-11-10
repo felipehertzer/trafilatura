@@ -5316,3 +5316,55 @@ def test_lone_page_labels(line, kept, fast):
     text = extract(page, fast=fast)
     assert "Paragraph 5 of the story" in text
     assert (line in text) is kept
+
+
+RELATED_LIST_STORY = "".join(
+    f"<p>The council confirmed on Saturday that the new bridge will open to traffic next month. Paragraph {n} of the "
+    "story says more about the bridge works.</p>"
+    for n in range(6)
+)
+
+
+@pytest.mark.parametrize("fast", [False, True])
+@pytest.mark.parametrize(
+    "label,items,kept",
+    [
+        # a related-stories label and its list of links
+        (
+            "<p><strong>Related stories:</strong></p>",
+            (
+                '<li><a href="/one">The council approves the second bridge across the river after a debate on costs</a></li>'
+                '<li><a href="/two">Detours start on Monday as crews close the old crossing for the final works</a></li>'
+            ),
+            False,
+        ),
+        (
+            "<h3>Related</h3>",
+            (
+                '<li><a href="/one">The council approves the second bridge across the river after a debate on costs</a></li>'
+                '<li><a href="/two">Detours start on Monday as crews close the old crossing for the final works</a></li>'
+                '<li><a href="/three">The mayor opens the new bridge</a></li>'
+            ),
+            False,
+        ),
+        # a list of prose under the label is the story's own
+        (
+            "<p>Related</p>",
+            (
+                "<li>Detours start on Monday as crews close the old crossing for the final works on the deck.</li>"
+                "<li>The second stage of the project starts in 2028, the state treasurer said on Friday.</li>"
+            ),
+            True,
+        ),
+    ],
+    ids=["paragraph-label", "heading-label", "prose-list"],
+)
+def test_related_list_under_its_label(label, items, kept, fast):
+    "A related-stories label and the list of links right under it are no part of the story."
+    page = (
+        f"<html><body><article>{RELATED_LIST_STORY[:400]}{label}<ul>{items}</ul>"
+        f"{RELATED_LIST_STORY[400:]}</article></body></html>"
+    )
+    text = extract(page, fast=fast)
+    assert "Paragraph 5 of the story" in text
+    assert ("Detours start on Monday" in text) is kept

@@ -147,6 +147,7 @@ RE_HTML_LANG = re.compile(r"([a-z]{2})")
 
 # A related-stories heading on its own ("Related", "Related news:")
 _RELATED_LABEL = r"Related(?: (?:stories|articles|posts|news|content|reading|coverage|links))?[:*]?"
+RELATED_LABEL = re.compile(rf"\W*{_RELATED_LABEL}$", flags=re.IGNORECASE)
 # Mostly filters for social media (text-level analog of the xpaths social/share tokens), and lone
 # labels: an ad slot, the sharing buttons, a related-stories heading
 RE_FILTER = re.compile(

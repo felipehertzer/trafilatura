@@ -17,6 +17,7 @@ from .htmlprocessing import (
     handle_textnode,
     link_density_test_tables,
     process_node,
+    prune_related_lists,
     prune_unwanted_nodes,
 )
 from .settings import (
@@ -673,7 +674,8 @@ def prune_unwanted_sections(
             delete_element(tree[-1], keep_tail=False)
         tree = delete_by_link_density(tree, "head", backtracking=False, favor_precision=True)
         tree = delete_by_link_density(tree, "quote", backtracking=False, favor_precision=True)
-    # after the link density tests, which need the refs
+    # after the link density tests, which need the refs, and so do the related lists
+    prune_related_lists(tree)
     strip_tags(tree, "span", *(() if "ref" in potential_tags else ("ref",)))
     return tree
 

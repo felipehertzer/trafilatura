@@ -17,7 +17,7 @@ from .settings import (
     Document,
     Extractor,
 )
-from .utils import LINK_FARM_RATIO, image_src, safe_base_url, safe_relative_url, textfilter, trim
+from .utils import LINK_FARM_RATIO, RELATED_LABEL, image_src, safe_base_url, safe_relative_url, textfilter, trim
 from .xml import delete_element, meta_items, remove_empty_elements, separates_inline
 
 LOGGER = logging.getLogger(__name__)
@@ -156,6 +156,30 @@ def prune_html(tree: HtmlElement, focus: str = "balanced") -> HtmlElement:
     for element in [e for e in tree.iterdescendants(CUT_EMPTY_ELEMS) if e.text is None and len(e) == 0]:
         delete_element(element, keep_tail=tails)
     return tree
+
+
+# blocks a related-stories label can be written in, before and after tag conversion
+_LABEL_BLOCKS = ("p", "head", "item", "quote", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote")
+RELATED_LIST_ITEM_MAX_CHARS = 150
+
+
+def _addresses(elem: HtmlElement) -> list[str]:
+    # a converted link keeps its address in "target"; an unconverted one in "href", where
+    # "target" is the HTML window name ("_blank")
+    return [link.get("href") or link.get("target") or "" for link in elem.iter("ref", "a")]
+
+
+def prune_related_lists(tree: HtmlElement) -> None:
+    """Delete a related-stories label ("Related stories:") and the list of links right under it,
+    wherever it sits in the article: a list of short items, each a link."""
+    for label in [elem for elem in tree.iter(*_LABEL_BLOCKS) if RELATED_LABEL.match(trim(elem.text_content()))]:
+        following = label.getnext()
+        if following is None or following.tag not in ("list", "ul", "ol"):
+            continue
+        items = [item for item in following if item.tag in ("item", "li")]
+        if items and all(_addresses(item) and len(trim(item.text_content())) <= RELATED_LIST_ITEM_MAX_CHARS for item in items):
+            delete_element(following)
+            delete_element(label)
 
 
 def prune_unwanted_nodes(tree: HtmlElement, nodelist: list[XPath], with_backup: bool = False) -> HtmlElement:
