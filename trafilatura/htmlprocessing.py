@@ -667,7 +667,9 @@ def prune_trailing_calls(tree: HtmlElement, url: str | None, min_size: int = 0) 
             furniture.extend(teasers)
             teasers = []
         elif _short_linked(block):
-            teasers.append(block)
+            # a teaser is a headline; a full sentence holding a link is walked over, not taken
+            if not (len(text.split()) >= 12 and SENTENCE_END.search(text)):
+                teasers.append(block)
         elif not (RE_FILTER.match(text) or _minor_block(text)):
             break
         index -= 1

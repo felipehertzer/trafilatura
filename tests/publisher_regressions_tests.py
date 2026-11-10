@@ -1309,3 +1309,16 @@ def test_the_last_lines_stay_when_too_little_would_be_left(min_size, paragraphs)
     tree = fromstring(f"<div><p>{story}</p><p>© 2026 Example News. All rights reserved.</p></div>")
     prune_trailing_calls(tree, "https://news.example.com/story", min_size)
     assert len(tree.findall(".//p")) == paragraphs
+
+
+def test_a_sentence_under_a_related_label_is_the_storys():
+    # a teaser is a headline; the sentence after the related box closes the story
+    last = "The opening is very different from the delays we covered in February, when the works stopped for a month."
+    tail = (
+        '<p>Related</p><p><a href="/other-story">Council approves the second bridge</a></p>'
+        "<p>The opening is very different from the delays "
+        '<a href="/delays">we covered in February</a>, when the works stopped for a month.</p>'
+    )
+    text = story_text(tail)
+    assert text.endswith(last)
+    assert "Council approves the second bridge" not in text
