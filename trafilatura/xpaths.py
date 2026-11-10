@@ -153,6 +153,12 @@ COMMENTS_XPATH = [
 
 _COMMENTS_ID = "[Cc]omment(?!ary)|comol"
 _COMMENTS_CLASS = "^[Cc]omment(?!ary)|(?:article|post)-comments"
+# Viafoura comment widgets: a class token starting "viafoura", or custom <vf-*>
+# elements. A feature class on the article wrapper ("article-viafoura") is no widget.
+_VIAFOURA_XPATH = XPath(
+    ".//*[(@class and contains(@class, 'viafoura') and re:test(@class, '(?:^|\\s)viafoura')) or starts-with(local-name(), 'vf-')]",
+    namespaces={"re": REGEXP_NS},
+)
 REMOVE_COMMENTS_XPATH = [
     XPath(
         f"""
@@ -161,7 +167,8 @@ REMOVE_COMMENTS_XPATH = [
         (@class and re:test(@class, '{_COMMENTS_CLASS}'))]
         """,
         namespaces={"re": REGEXP_NS},
-    )
+    ),
+    _VIAFOURA_XPATH,
 ]
 # plus ol/ul comment lists, without the disqus ids, in one tree walk
 REMOVE_COMMENTS_AND_LISTS_XPATH = [
@@ -174,7 +181,8 @@ REMOVE_COMMENTS_AND_LISTS_XPATH = [
         not(.//h1)]
         """,
         namespaces={"re": REGEXP_NS},
-    )
+    ),
+    _VIAFOURA_XPATH,
 ]
 # or self::span
 # or contains(@class, 'comment') or contains(@id, 'comment')

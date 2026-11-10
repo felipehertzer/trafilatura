@@ -5287,3 +5287,29 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+@pytest.mark.parametrize(
+    "widget",
+    [
+        '<div class="viafoura"><p>Join the conversation. Comments are reviewed before they appear here.</p></div>',
+        "<vf-conversations><p>Join the conversation. Sign in to comment on this story.</p></vf-conversations>",
+        '<section class="viafoura-comments vf-widget"><p>Join the conversation. You must confirm your public display name.</p></section>',
+    ],
+    ids=["class", "custom-element", "class-prefix"],
+)
+@pytest.mark.parametrize("fast", [False, True])
+def test_viafoura_comment_widgets_are_removed(widget, fast):
+    "Viafoura comment widgets go with the comments; a feature class naming them on the article wrapper does not."
+    paragraphs = "".join(
+        f"<p>Paragraph {number}: the council confirmed on Saturday that bridge number {number} "
+        "will open to traffic next month after the repairs.</p>"
+        for number in range(6)
+    )
+    my_html = (
+        '<html><body><article><div id="content" class="article-newsletter article-viafoura">'
+        f"{paragraphs}{widget}</div></article></body></html>"
+    )
+    text = bare_extraction(my_html, include_comments=False, fast=fast).text
+    assert "bridge number 5" in text
+    assert "Join the conversation" not in text
