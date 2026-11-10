@@ -1547,3 +1547,23 @@ def test_normalize_authors_datelines(byline, expected):
 def test_normalize_authors_credit_prefixes(byline, expected):
     "Credit prefixes are removed without turning their words into extra authors."
     assert normalize_authors(None, byline) == expected
+
+
+@pytest.mark.parametrize(
+    ("byline", "expected"),
+    [
+        ("CITY BEATJane Doe", "Jane Doe"),
+        ("By CITY BEATJane Doe", "Jane Doe"),
+        ("EXNJane Doe", "Jane Doe"),
+        # a brand written the same way stays: one word, or words naming no person
+        ("TRUCKtalk", "TRUCKtalk"),
+        ("SUPERCentral", "SUPERCentral"),
+        ("EXFocus Editor", "EXFocus Editor"),
+        ("EXUniversity Example", "EXUniversity Example"),
+        ("EXFootball Staff", "EXFootball Staff"),
+        ("EXNet News Desk", "EXNet News Desk"),
+    ],
+)
+def test_normalize_authors_glued_label(byline, expected):
+    "A column label in capitals glued to the name is no part of it."
+    assert normalize_authors(None, byline) == expected
