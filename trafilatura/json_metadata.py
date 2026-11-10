@@ -6,6 +6,7 @@ For reference, here is the list of all JSON-LD types: https://schema.org/docs/fu
 import json
 import logging
 import re
+from collections.abc import Collection
 from html import unescape
 from re import Pattern
 from typing import Any
@@ -281,7 +282,9 @@ def _json_objects(parent: Any) -> list[dict[str, Any]]:
     return objects
 
 
-def process_parent(parent: Any, metadata: Document, *, include_organization_authors: bool = True) -> Document:
+def process_parent(
+    parent: Any, metadata: Document, *, include_organization_authors: bool = True, page_headlines: Collection[str] = ()
+) -> Document:
     "Find and extract selected metadata from JSON parts."
     for content in _json_objects(parent):
         # publisher may be a bare string, not a dict
@@ -368,7 +371,7 @@ def process_parent(parent: Any, metadata: Document, *, include_organization_auth
             if (
                 isinstance(headline, str)
                 and headline.strip()
-                and (not metadata.title or is_branded_headline(metadata.title, headline))
+                and (not metadata.title or is_branded_headline(metadata.title, headline, page_headlines))
             ):
                 metadata.title = headline
     return metadata
@@ -390,13 +393,22 @@ def is_schema_org_context(context: Any) -> bool:
 TITLE_SUFFIX_SEPARATORS = frozenset("|-–—·•")
 
 
-def is_branded_headline(title: str, headline: str) -> bool:
-    """True when a meta title is the article headline plus a separated suffix."""
+def is_branded_headline(title: str, headline: str, page_headlines: Collection[str] = ()) -> bool:
+    """True when a meta title is the article headline plus a separated suffix.
+
+    A title the page itself shows as its headline (``page_headlines``: the text of its h1 elements)
+    is no headline plus branding: the shorter JSON-LD headline is then a cut one ("... including 18"
+    for "... including 18 men and four women — but 27 of the 31 injuries ..."). After a pipe the rest
+    is a label whatever the page shows ("... | The Punter").
+    """
     title = " ".join(unescape(title).split())
     headline = " ".join(unescape(headline).split())
     if not headline or title == headline or not title.startswith(headline):
         return False
-    return title[len(headline) :].lstrip()[:1] in TITLE_SUFFIX_SEPARATORS
+    separator = title[len(headline) :].lstrip()[:1]
+    if separator != "|" and title.casefold() in page_headlines:
+        return False
+    return separator in TITLE_SUFFIX_SEPARATORS
 
 
 def extract_json_image(value: Any, references: dict[str, Any]) -> str | None:
@@ -413,7 +425,11 @@ def extract_json_image(value: Any, references: dict[str, Any]) -> str | None:
 
 
 def extract_json(
-    schema: list[Any] | dict[str, str], metadata: Document, *, include_organization_authors: bool = True
+    schema: list[Any] | dict[str, str],
+    metadata: Document,
+    *,
+    include_organization_authors: bool = True,
+    page_headlines: Collection[str] = (),
 ) -> Document:
     """Parse and extract metadata from JSON-LD data.
 
@@ -459,7 +475,9 @@ def extract_json(
                 metadata.image = extract_json_image(node.get("image"), references)
                 if metadata.image:
                     break
-    return process_parent(parents, metadata, include_organization_authors=include_organization_authors)
+    return process_parent(
+        parents, metadata, include_organization_authors=include_organization_authors, page_headlines=page_headlines
+    )
 
 
 def extract_json_author(elemtext: str, regular_expression: Pattern[str]) -> str | None:

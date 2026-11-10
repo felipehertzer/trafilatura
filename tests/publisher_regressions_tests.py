@@ -1346,3 +1346,22 @@ def test_a_colon_opens_a_subtitle_not_the_branding():
     head = '<meta property="og:title" content="Coast v. Council: how do they compare?">'
     head += ld({"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Coast v. Council"})
     assert extract_metadata(page(head)).title == "Coast v. Council: how do they compare?"
+
+
+@pytest.mark.parametrize(
+    ("title", "headline", "expected"),
+    [
+        # the page shows the whole title as its headline: the JSON-LD headline is a cut one
+        (
+            "Storm damaged 22 of the 179 homes inspected — but 27 of the 31 repairs are done",
+            "Storm damaged 22 of the 179 homes inspected",
+            "Storm damaged 22 of the 179 homes inspected — but 27 of the 31 repairs are done",
+        ),
+        # after a pipe the rest is a label, whatever the page shows
+        ("Storm hits coast | The Punter", "Storm hits coast", "Storm hits coast"),
+    ],
+)
+def test_a_title_the_page_shows_whole_is_no_headline_plus_branding(title, headline, expected):
+    head = f'<meta property="og:title" content="{title}">'
+    head += ld({"@context": "https://schema.org", "@type": "NewsArticle", "headline": headline})
+    assert extract_metadata(page(head, f"<h1>{title}</h1>")).title == expected
