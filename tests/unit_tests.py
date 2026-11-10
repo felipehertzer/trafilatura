@@ -5719,3 +5719,32 @@ def test_tree_input_baseline(body):
     assert html2txt(tree) == html2txt(page)
     assert baseline(tree)[1] == baseline(page)[1]
     assert etree.tostring(tree) == before
+
+
+LABEL_STORY = "".join(
+    f"<p>The council confirmed on Saturday that the new bridge will open to traffic next month. Paragraph {n} of the "
+    "story says more about the bridge works.</p>"
+    for n in range(6)
+)
+
+
+@pytest.mark.parametrize("fast", [False, True])
+@pytest.mark.parametrize(
+    "line,kept",
+    [
+        ("Advertisement", False),
+        ("Share", False),
+        ("Share this article", False),
+        ("Related", False),
+        ("Related stories:", False),
+        # prose starting with the same words stays
+        ("Share prices fell after the council announced the cost of the second bridge.", True),
+        ("Related costs rose sharply once the river crossing had to be closed for the works.", True),
+    ],
+)
+def test_lone_page_labels(line, kept, fast):
+    "A lone ad, sharing or related-stories label is no text."
+    page = f"<html><body><article>{LABEL_STORY[:300]}<p>{line}</p>{LABEL_STORY[300:]}<p>{line}</p></article></body></html>"
+    text = extract(page, fast=fast)
+    assert "Paragraph 5 of the story" in text
+    assert (line in text) is kept
