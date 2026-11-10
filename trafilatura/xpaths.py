@@ -179,6 +179,19 @@ REMOVE_COMMENTS_AND_LISTS_XPATH = [
 # or self::span
 # or contains(@class, 'comment') or contains(@id, 'comment')
 
+# Infinite-scroll containers, whatever they hold: core.prune_appended_articles() keeps the
+# article marked with the page's permalink in any of them and drops its appended siblings.
+APPENDED_ARTICLES_XPATH = [
+    XPath(
+        """
+        .//*[self::div or self::section or self::aside][
+        (@id and re:test(@id, 'mvp-post-add-(?:box|wrap)|infinite-?scroll')) or
+        (@class and re:test(@class, 'mvp-post-add-(?:box|wrap)|infinite-?scroll'))]
+        """,
+        namespaces={"re": REGEXP_NS},
+    )
+]
+
 # Raw-tree prune, kept out of OVERALL_DISCARD_XPATH because its over-pruning guard would revert it.
 RAW_TREE_PRUNE_XPATH = [
     # Keep an infinite-scroll shell holding an h1, or the first h2 if no h1
@@ -198,6 +211,9 @@ RAW_TREE_PRUNE_XPATH = [
     # also matches the article body ("elementor-widget")
     XPath(".//*[self::div or self::section or self::aside][contains(@class, 'elementor-share-buttons')]"),
 ]
+# On a page without an infinite-scroll container (APPENDED_ARTICLES_XPATH finds none), the container
+# rule above has nothing to decide on: the rest of the list is enough.
+RAW_TREE_PRUNE_NO_CONTAINER_XPATH = RAW_TREE_PRUNE_XPATH[1:]
 
 
 # OVERALL_DISCARD_XPATH boilerplate token vocabulary, grouped by concept, composed via _alt()

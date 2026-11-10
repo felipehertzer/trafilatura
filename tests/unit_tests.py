@@ -5287,3 +5287,44 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+@pytest.mark.parametrize(
+    "layout",
+    [
+        # the headline sits above the container, which holds the current article and the next one
+        (
+            "<header><h1>Bridge opening</h1></header><div class='infinite-scroll'>"
+            "<article data-url='https://www.example.com/news/bridge/'>{current}</article>"
+            "<article data-url='https://www.example.com/news/football'><h2>Football</h2>{appended}</article></div>"
+        ),
+        # the next story comes first in the container and is longer
+        (
+            "<div class='box-wrap infinite-scroll'>"
+            "<article rel='https://www.example.com/news/football'><h2>Football</h2>{appended}{appended}</article>"
+            "<article rel='https://example.com/news/bridge?ref=home'><h1>Bridge opening</h1>{current}</article></div>"
+        ),
+    ],
+    ids=["headline-outside", "appended-first"],
+)
+@pytest.mark.parametrize("fast", [False, True])
+def test_infinite_scroll_keeps_the_article_marked_with_the_page_url(layout, fast):
+    "An infinite-scroll container keeps the article carrying the page's permalink and drops the appended ones."
+    current = "".join(
+        f"<p>Paragraph {number}: the council confirmed on Saturday that bridge number {number} "
+        "will open to traffic next month after the repairs.</p>"
+        for number in range(6)
+    )
+    appended = "".join(
+        f"<p>Another story entirely about football result {number}, with the scores of the weekend's games.</p>"
+        for number in range(6)
+    )
+    url = "https://www.example.com/news/bridge"
+    my_html = (
+        f"<html><head><link rel='canonical' href='{url}'/></head><body>"
+        + layout.format(current=current, appended=appended)
+        + "</body></html>"
+    )
+    text = bare_extraction(my_html, url=url, fast=fast).text
+    assert "bridge number 5" in text
+    assert "football" not in text
