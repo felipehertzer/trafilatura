@@ -957,3 +957,23 @@ def test_author_markers(decoy, marker):
 def test_author_discard_markers(marker):
     "Authors inside discarded sections are ignored."
     assert extract_metadata(wrap(marker, '<span class="author">Jenny Smith</span>')).author is None
+
+
+@pytest.mark.parametrize(
+    "card",
+    [
+        # an author card holding a label, the profile link and the author's social links
+        (
+            '<div class="post-author-card"><span>Posted by </span><a class="profile author-link" href="/authors/jane-doe">'
+            '<strong>Jane Doe</strong></a><p><a class="author-social-link" href="/in/jane">LinkedIn</a> | '
+            '<a href="https://example.org">Website</a></p></div>'
+        ),
+        (
+            '<div class="author-box"><img src="/jane.jpg" alt=""/><a class="author-link" href="/authors/jane-doe">'
+            'Jane Doe</a><p class="author-box-about">Follow on <a href="/x">X</a> and <a href="/rss">RSS</a></p></div>'
+        ),
+    ],
+)
+def test_author_link_inside_author_card(card):
+    "The link the page marks as the author's beats the card around it."
+    assert extract_metadata(f"<html><body>{card}</body></html>").author == "Jane Doe"
