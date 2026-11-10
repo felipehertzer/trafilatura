@@ -957,3 +957,24 @@ def test_author_markers(decoy, marker):
 def test_author_discard_markers(marker):
     "Authors inside discarded sections are ignored."
     assert extract_metadata(wrap(marker, '<span class="author">Jenny Smith</span>')).author is None
+
+
+@pytest.mark.parametrize(
+    ("article_class", "comments_class", "expected"),
+    [
+        ("post", "post-comments", None),
+        ("post", "article-comments", None),
+        ("post", "story-comments", None),
+        # a state class on the article names no comment section
+        ("post has-comments", "comment-form", "Jane Doe"),
+    ],
+)
+def test_byline_not_read_from_comment_section(article_class, comments_class, expected):
+    "A comment section with a prefixed class is no byline."
+    byline = '<span class="author">Jane Doe</span>' if expected else ""
+    page = (
+        f'<html><body><article class="{article_class}"><h1>Storm</h1>{byline}<p>Some text.</p>'
+        f'<section class="{comments_class}"><div><span class="{comments_class}__author">John Example</span>'
+        "<p>I disagree strongly.</p></div></section></article></body></html>"
+    )
+    assert extract_metadata(page).author == expected
