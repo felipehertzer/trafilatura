@@ -1304,3 +1304,24 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    ("byline", "expected"),
+    [
+        # "with" joins two people
+        ("Jane Doe with John Roe", "Jane Doe; John Roe"),
+        ("Jane Doe with John Roe in Paris", "Jane Doe; John Roe"),
+        ("Jane Doe with Marie-Anne LE ROUX", "Jane Doe; Marie-Anne LE ROUX"),
+        ("Jane Doe, with John Roe", "Jane Doe; John Roe"),
+        # before anything else it leads in what is no author
+        ("Jane Doe with Example", "Jane Doe"),
+        ("In paid partnership with Example", "In paid partnership"),
+        ("Jane Doe with EXN bureaus in Paris", "Jane Doe"),
+        ("EXN with Example Sports", "EXN"),
+        ("Jane Doe With Additional Reporting By John Roe", "Jane Doe"),
+    ],
+)
+def test_normalize_authors_with_joins_two_people(byline, expected):
+    "A person after 'with' is a second author, anything else goes with it."
+    assert normalize_authors(None, byline) == expected

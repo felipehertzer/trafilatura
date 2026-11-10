@@ -100,6 +100,33 @@ AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+# "with" joins two people too ("Jane Doe with John Roe"), but only before a person: what
+# else follows it is no author ("In paid partnership with Example", "Jane Doe with Example")
+# and goes with it, as after any preposition. At the start of a part it is a mere connector.
+AUTHOR_WITH = re.compile(r"(?:(^|[;|/,&])\s*|\s+)with\s+", flags=re.IGNORECASE)
+AUTHOR_ROLE_WORDS = frozenset(
+    {
+        "editor", "correspondent", "reporter", "writer", "journalist", "producer", "columnist", "presenter",
+        "host", "contributor", "critic", "photographer", "spokesperson", "spokesman", "spokeswoman",
+        "commentator", "analyst", "anchor", "director", "manager", "professor", "fellow", "lecturer",
+        "researcher", "historian", "founder", "officer", "economist", "scientist", "president", "chair",
+        "adviser", "advisor", "consultant", "coordinator", "teacher", "ceo", "cmo", "cto", "cfo", "coo",
+    }
+)  # fmt: skip
+# A person's name ahead: two capitalised words ("John Roe", "Marie-Anne LE ROUX", "Dana O'Neil"),
+# not a credit ("With Additional Reporting By John Roe").
+AUTHOR_PERSON_AHEAD = re.compile(
+    r"\s*([A-ZÀ-Þ](?:[^\W\d_]|['’-])*)\s+([A-ZÀ-Þ](?:[^\W\d_]|['’-])*)(?![^\W\d_]|['’-]|\s+[Bb]y\b)"
+)
+AUTHOR_WORD = re.compile(r"[^\W\d_]+")
+# words of an organisation's name, never of a person's
+AUTHOR_NOT_NAME_WORDS = frozenset(
+    {
+        "news", "desk", "team", "staff", "group", "media", "network", "solutions", "services", "systems",
+        "labs", "university", "college", "school", "institute", "international", "online", "magazine", "radio",
+        "sports", "football", "motoring",
+    }
+)  # fmt: skip
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -332,6 +359,27 @@ def normalize_json_values(value: Any) -> Any:
     return value
 
 
+def _is_person_ahead(text: str) -> bool:
+    """Whether a text opens with a person's name: two capitalised words, none of them a role or a
+    word of an organisation ("John Roe", but not "Beauty Editor" or "Example Sports")."""
+    match = AUTHOR_PERSON_AHEAD.match(text)
+    if match is None:
+        return False
+    words = {word.casefold() for name in match.groups() for word in AUTHOR_WORD.findall(name)}
+    return not words & (AUTHOR_NOT_NAME_WORDS | AUTHOR_ROLE_WORDS)
+
+
+def _separate_with(author_string: str) -> str:
+    """Separate the person a "with" joins to the one before: "Jane Doe with John Roe"."""
+
+    def separate(match: re.Match[str]) -> str:
+        if match[1] is not None:
+            return match[1] + " "
+        return "; " if _is_person_ahead(author_string[match.end() :]) else match.group()
+
+    return AUTHOR_WITH.sub(separate, author_string)
+
+
 def normalize_authors(current_authors: str | None, author_string: str) -> str | None:
     """Normalize author info to focus on author names only"""
     new_authors = []
@@ -350,6 +398,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author_string = unescape(author_string)
     # remove html tags
     author_string = HTML_STRIP_TAGS.sub("", author_string)
+    author_string = _separate_with(author_string)
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
         author = trim(author)
