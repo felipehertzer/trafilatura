@@ -5287,3 +5287,45 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+RECOVERED_STORY = [
+    "NEW YORK, New York - U.S. stock markets were again sold off on Tuesday as the ceasefire deadline loomed.",
+    "The technology-heavy NASDAQ Composite led declines among the major U.S. benchmarks, falling 144 points.",
+    "The Dow Jones Industrial Average also suffered a triple-digit loss, shedding 292 points to close lower.",
+]
+
+
+def frameless_story_page(inside="", before=""):
+    "A story in a page that matches no body frame, followed by its share row, a widget and promos."
+    markets = ["Tokyo", "Sydney", "Frankfurt", "London", "Paris", "Toronto", "Mumbai", "Seoul"]
+    story = "".join(f"<p><span>{sentence}</span></p>" for sentence in RECOVERED_STORY) + "".join(
+        f"<p>In {market}, the benchmark index moved {index + 1}.{index} percent as investors weighed the outlook for "
+        f"interest rates, energy prices and the {market} currency over the coming {index + 2} weeks.</p>"
+        for index, market in enumerate(markets)
+    )
+    return (
+        '<html><body><div class="wrapper"><div class="left-section"><div class="banner-section">'
+        f'<h2>Stocks slide</h2><p>Jane Doe<br>22 Apr 2026</p>{before}<div class="banner-text"><div>{story}{inside}</div></div>'
+        '</div><div class="row share-section"><div class="share"><h5><a href="#">Share article:</a></h5></div></div>'
+        '<div id="taboola-below-article"></div>'
+        '<div class="row subscribe"><h5><a href="#">Subscribe and Follow</a></h5>'
+        "<p>Get a daily dose of Example Sun news through our daily email, its complimentary and keeps you fully up "
+        "to date with world and business news as well.</p></div>"
+        '<div class="row releases"><h4><a href="#">News releases</a></h4>'
+        "<p>Publish news of your business, community or sports group by submitting a news release to Example Sun.</p>"
+        "</div></div></div></body></html>"
+    )
+
+
+@pytest.mark.parametrize("fast", [False, True])
+def test_promos_after_a_recovered_story_end(fast):
+    "Blocks recovered from the whole page after the story's share row and widgets are furniture."
+    last = "Wall Street closed the session lower for a second straight day, traders said in New York on Tuesday."
+    # a share row inside the story ends nothing
+    inline = f'<div class="share-inline"><a href="#">Share</a></div><p>{last}</p>'
+    text = extract(frameless_story_page(inside=inline), fast=fast)
+    for sentence in [*RECOVERED_STORY, last]:
+        assert sentence in text
+    assert "daily dose" not in text
+    assert "news release" not in text
