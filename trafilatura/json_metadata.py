@@ -171,6 +171,8 @@ AUTHOR_CREDENTIALS = frozenset(
 )  # fmt: skip
 # A second person after a role: "Chief political correspondent and Paul Karp".
 AUTHOR_JOINED_NAME = re.compile(r"\s+(?:and|with)\s+(?=[A-ZÀ-Þ][^\W\d_]*\s+[A-ZÀ-Þ])")
+# A person's name ahead: two capitalised words ("Paul Karp", "Marie-Morgane LE MOEL", "Dana O'Neil").
+AUTHOR_PERSON_AHEAD = re.compile(r"\s*([A-ZÀ-Þ](?:[^\W\d_]|['’-])*)\s+([A-ZÀ-Þ](?:[^\W\d_]|['’-])*)")
 AUTHOR_CREDENTIAL_LIKE = re.compile(r"[A-Za-z]{2,5}\.?[®™]?")
 # A programme part after a comma: "Andrew Whitelaw, Episode 3".
 AUTHOR_EPISODE = re.compile(r"(?:episode|ep|part|series|season|chapter|vol(?:ume)?)\.?\s*\d+", flags=re.IGNORECASE)
@@ -239,6 +241,8 @@ AUTHOR_NOT_NAME_WORDS = frozenset(
         "magazine", "radio", "sports", "football", "motoring",
     }
 )  # fmt: skip
+# what no word of a person's name is
+AUTHOR_NOT_PERSON_WORDS = AUTHOR_NOT_NAME_WORDS | AUTHOR_ROLE_WORDS | AUTHOR_TITLE_WORDS | AUTHOR_LEGAL_FORMS
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -584,6 +588,16 @@ def _is_person_detail(segment: str) -> bool:
     return bool(words & (AUTHOR_NOT_NAME_WORDS | AUTHOR_LEGAL_FORMS))
 
 
+def _is_person_ahead(text: str) -> bool:
+    """Whether a text opens with a person's name: two capitalised words, none of them a role, a word
+    of a job title or of an organisation ("Paul Karp", but not "Beauty Editor" or "Fox Sports")."""
+    match = AUTHOR_PERSON_AHEAD.match(text)
+    if match is None:
+        return False
+    words = {word.casefold() for name in match.groups() for word in AUTHOR_WORD.findall(name)}
+    return not words & AUTHOR_NOT_PERSON_WORDS
+
+
 def _drop_person_details(author_string: str) -> str:
     """Drop what follows a name after a comma when it describes the person.
 
@@ -606,8 +620,9 @@ def _drop_person_details(author_string: str) -> str:
             elif AUTHOR_DESCRIPTION.search(segment):
                 in_role = True
                 # "Sarah Martin, Chief political correspondent and Paul Karp" credits Paul Karp too
+                # "Lesley Thomas, Weekend and Beauty Editor" credits no one else: the title goes on
                 joined = AUTHOR_JOINED_NAME.split(segment, maxsplit=1)
-                if len(joined) == 1:
+                if len(joined) == 1 or not _is_person_ahead(joined[1]):
                     continue
                 segment, in_role = " and " + joined[1], False
             elif _is_person_detail(segment):
@@ -653,7 +668,7 @@ def _drop_glued_label(author: str) -> str:
     if match is None:
         return author
     words = {match[1].casefold(), match[2].casefold()}
-    if words & (AUTHOR_NOT_NAME_WORDS | AUTHOR_ROLE_WORDS | AUTHOR_TITLE_WORDS | AUTHOR_LEGAL_FORMS):
+    if words & AUTHOR_NOT_PERSON_WORDS:
         return author
     return author[match.end() :]
 

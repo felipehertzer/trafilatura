@@ -1256,3 +1256,17 @@ def test_a_name_may_hold_words_that_are_also_function_words(byline, author):
 )
 def test_a_job_title_is_read_after_the_credit_words(byline, author):
     assert normalize_authors(None, byline) == author
+
+
+@pytest.mark.parametrize(
+    ("byline", "author"),
+    [
+        # "and" inside a job title joins no second person
+        ("Lesley Thomas, Weekend and Beauty Editor", "Lesley Thomas"),
+        ("Phoebe McDowell, Property and Interiors Director", "Phoebe McDowell"),
+        # a person after the title is a second credit
+        ("Sarah Martin, Chief political correspondent and Paul Karp", "Sarah Martin; Paul Karp"),
+    ],
+)
+def test_and_inside_a_job_title_credits_no_one_else(byline, author):
+    assert normalize_authors(None, byline) == author
