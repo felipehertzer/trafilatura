@@ -231,7 +231,7 @@ def sanitize_tree(tree: HtmlElement, options: Extractor) -> tuple[HtmlElement, s
     cleaned_tree = tree_cleaning(tree, options)
     # the calls to action and related lists after the story, before links are stripped
     prune_related_lists(cleaned_tree)
-    prune_trailing_calls(cleaned_tree, options.url)
+    prune_trailing_calls(cleaned_tree, options.url, options.min_extracted_size)
     cleaned_tree = convert_markup(cleaned_tree, options)
     return cleaned_tree, trim(" ".join(cleaned_tree.itertext()))
 
