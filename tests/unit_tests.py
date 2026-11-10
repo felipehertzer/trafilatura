@@ -5287,3 +5287,33 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+QUOTE_STORY = "".join(
+    f"<p>The council confirmed on Saturday that the new bridge will open to traffic next month. Paragraph {n} of the "
+    "story says more about the bridge works.</p>"
+    for n in range(6)
+)
+
+
+@pytest.mark.parametrize("fast", [False, True])
+@pytest.mark.parametrize(
+    "quote_class,kept",
+    [
+        # a related-links block set as a quote
+        ("wp-block-related-links", False),
+        # a quote is kept
+        ("wp-block-quote", True),
+    ],
+    ids=["related-links", "quote"],
+)
+def test_related_links_set_as_a_quote(quote_class, kept, fast):
+    "A block of related links marked up as a quote is not part of the story."
+    quote = (
+        f'<blockquote class="{quote_class}"><p>Read more</p><p><a href="/other-story">The council approves '
+        "the second bridge across the river after a long debate about its costs</a></p></blockquote>"
+    )
+    text = extract(f"<html><body><article>{QUOTE_STORY[:400]}{quote}{QUOTE_STORY[400:]}</article></body></html>", fast=fast)
+    assert "Paragraph 5 of the story" in text
+    assert ("Read more" in text) is kept
+    assert ("second bridge across the river" in text) is kept

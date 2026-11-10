@@ -312,6 +312,8 @@ OVERALL_DISCARD_XPATH = [
         """,
         namespaces={"re": REGEXP_NS},
     ),
+    # related-links blocks set as quotes ("wp-block-related-links")
+    XPath(f".//quote[re:test(@class, '{_alt(_RELATED_CLASS_TOKENS[:1])}')]", namespaces={"re": REGEXP_NS}),
 ]
 
 # conflicts:
