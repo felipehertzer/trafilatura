@@ -5287,3 +5287,39 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        (
+            "The players, as reported by this newspaper last week, were holding out hope for a new contract worth "
+            "close to $1.7 million a season."
+        ),
+        'The coach told reporters after the game that the players were holding out hope for a new contract, "and so am I."',
+    ],
+)
+@pytest.mark.parametrize("options", [{}, {"fast": True}, {"favor_precision": True}])
+def test_paragraph_spanned_by_one_link_is_kept_when_a_sentence(sentence, options):
+    "A complete sentence linked as a whole is prose, a linked teaser line is not."
+    paragraphs = [
+        f"<p>Paragraph {number}: the council confirmed on Saturday that bridge number {number} "
+        "will open to traffic next month after the repairs.</p>"
+        for number in range(6)
+    ]
+    teaser = (
+        '<p><a href="https://example.org/live">Read the latest live updates on the coastal storm, the road closures '
+        "and the evacuation centres across the region today here</a></p>"
+    )
+    my_html = (
+        "<html><body><article><h1>Contract</h1>"
+        + "".join(paragraphs[:3])
+        + f'<p><a href="https://example.org/other">{sentence}</a></p>'
+        + "".join(paragraphs[3:])
+        + teaser
+        + "</article></body></html>"
+    )
+    text = bare_extraction(my_html, **options).text
+    assert "holding out hope" in text
+    assert "bridge number 5" in text
+    assert "latest live updates" not in text
