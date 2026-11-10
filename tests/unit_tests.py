@@ -5287,3 +5287,30 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+@pytest.mark.parametrize(
+    "wrapper, first, second",
+    [
+        ("article", "article__body", "article__body article__body--bottom"),
+        ("main", "article-body", "article-body"),
+        ("article", "entry-content", "entry-content entry-content--more"),
+    ],
+)
+def test_article_body_split_over_two_containers(wrapper, first, second):
+    "An article body split over containers sharing its class is read whole."
+    paragraphs = "".join(
+        f"<p>Paragraph {number}: the council confirmed on Saturday that bridge number {number} "
+        "will open to traffic next month after the repairs.</p>"
+        for number in range(4)
+    )
+    my_html = (
+        f'<html><body><{wrapper}><h1>Bridge</h1><section class="{first}">{paragraphs}</section>'
+        '<div class="ad">Advertisement</div>'
+        f'<section class="{second}"><p>The other three people were taken to the regional hospital '
+        f"in a stable condition.</p></section></{wrapper}></body></html>"
+    )
+    for fast in (False, True):
+        text = bare_extraction(my_html, fast=fast).text
+        assert "bridge number 3" in text
+        assert "regional hospital" in text
