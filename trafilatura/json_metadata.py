@@ -113,6 +113,10 @@ AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+# "and" in Spanish, Portuguese and French credits ("Clara Roe e Isabel Doe");
+# only between two full names, since "e" also joins Portuguese surnames ("João e Silva").
+AUTHOR_FOREIGN_AND = re.compile(r"(?<=[^\W\d_]) (?:y|e|et) (?=[A-ZÀ-Þ])")
+AUTHOR_FULL_NAME = re.compile(r"[A-ZÀ-Þ][^\W\d_]*(?:\s+[A-ZÀ-Þ][^\W\d_]*)+")
 AUTHOR_DATELINE = re.compile(
     r"\s+(?:in|reporting\s+from)\s+[A-ZÀ-Þ][^,;|/&]*?(?:,\s*[A-ZÀ-Þ][^\s,;|/&]*)?"
     r"(?=\s+(?:and|with)\s+|\s*[,;|/&]|$)"
@@ -384,6 +388,18 @@ def normalize_json_values(value: Any) -> Any:
     return value
 
 
+def _join_foreign_and(author_string: str) -> str:
+    """Separate two full names joined by a foreign "and"; keep a compound surname."""
+    parts = AUTHOR_FOREIGN_AND.split(author_string)
+    joined = parts[0]
+    for connector, part in zip(AUTHOR_FOREIGN_AND.findall(author_string), parts[1:], strict=True):
+        left = re.split(r"[;|/,&]", joined)[-1].strip()
+        right = re.split(r"[;|/,&]", part)[0].strip()
+        full = AUTHOR_FULL_NAME.fullmatch(left) and AUTHOR_FULL_NAME.fullmatch(right)
+        joined += ("; " if full else connector) + part
+    return joined
+
+
 def normalize_authors(current_authors: str | None, author_string: str) -> str | None:
     """Normalize author info to focus on author names only"""
     new_authors = []
@@ -402,6 +418,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author_string = unescape(author_string)
     # remove html tags and email addresses
     author_string = AUTHOR_EMAIL.sub("", HTML_STRIP_TAGS.sub("", author_string))
+    author_string = _join_foreign_and(author_string)
     author_string = AUTHOR_DATELINE.sub("", author_string)
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
