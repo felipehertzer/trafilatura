@@ -91,7 +91,10 @@ JSON_NAME = re.compile(r'"@type":"[Aa]rticle", ?"name": ?"([^"\\]+)', re.DOTALL)
 JSON_HEADLINE = re.compile(r'"headline": ?"([^"\\]+)', re.DOTALL)
 JSON_SEQ = [('"name"', JSON_NAME), ('"headline"', JSON_HEADLINE)]
 
-AUTHOR_PREFIX = re.compile(r"^([a-zäöüß]+(ed|t))? ?(written by|words by|words|by|von|from) ", flags=re.IGNORECASE)
+AUTHOR_PREFIX = re.compile(
+    r"^([a-zäöüß]+(ed|t)|story|reporting|article|analysis)? ?(written by|words by|words|by|von|from|por|par|door) ",
+    flags=re.IGNORECASE,
+)
 AUTHOR_REMOVE_NUMBERS = re.compile(r"\d.+?$")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
 AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")

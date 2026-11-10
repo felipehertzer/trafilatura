@@ -1304,3 +1304,20 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    "author_string, expected",
+    [
+        ("Por Jane Doe", "Jane Doe"),
+        ("par Jean Dupont", "Jean Dupont"),
+        ("Door Jan Jansen", "Jan Jansen"),
+        ("Story by Jane Doe", "Jane Doe"),
+        ("Reporting by Jane Doe", "Jane Doe"),
+        ("Analysis by Jane Doe", "Jane Doe"),
+        ("Article by Jane Doe", "Jane Doe"),
+    ],
+)
+def test_normalize_authors_credit_prefixes(author_string, expected):
+    "credit words in other languages and forms are not part of the name"
+    assert normalize_authors(None, author_string) == expected
