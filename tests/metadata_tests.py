@@ -726,3 +726,36 @@ def test_block_boundaries_not_fused():
 
     inline = extract_metadata("<html><body><h1>Hyper<span>link</span>ed</h1></body></html>")
     assert inline.title == "Hyperlinked"
+
+
+@pytest.mark.parametrize(
+    ("post", "expected"),
+    [
+        # a related-post card, its taxonomy classes name an author term
+        (
+            (
+                '<div class="e-loop-item post-42 type-post status-publish hentry author_tags-jane-roe">'
+                '<h3><a href="/2026/mining-in-the-north/">Mining in the north 2026</a></h3></div>'
+            ),
+            None,
+        ),
+        (
+            (
+                '<article class="post-42 post type-post hentry author_tags-jane-roe">'
+                '<h2><a href="/2026/mining-in-the-north/">Mining in the north</a></h2></article>'
+            ),
+            None,
+        ),
+        # a byline inside the post container is still found
+        (
+            (
+                '<div class="post-1 type-post status-publish hentry author-jenny-smith">'
+                '<span class="author vcard">Jenny Smith</span></div>'
+            ),
+            "Jenny Smith",
+        ),
+    ],
+)
+def test_byline_not_read_from_post_container(post, expected):
+    "A post container is never the byline, whatever its taxonomy classes say."
+    assert extract_metadata(f"<html><body>{post}</body></html>").author == expected
