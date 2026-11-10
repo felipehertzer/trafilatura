@@ -192,6 +192,8 @@ def extract_meta_json(
     include_organization_authors: bool = True,
 ) -> Document:
     """Parse and extract metadata from JSON-LD data"""
+    # the headlines the page itself shows: is_branded_headline() tells a branded title from a full one by them
+    page_headlines = {" ".join(h1.text_content().split()).casefold() for h1 in tree.iter("h1")}
     for elem in tree.xpath('.//script[@type="application/ld+json" or @type="application/settings+json"]'):
         if not elem.text:
             continue
@@ -210,7 +212,13 @@ def extract_meta_json(
             except json.JSONDecodeError:
                 metadata = extract_json_parse_error(element_text, metadata)
                 continue
-        metadata = extract_json(schema, metadata, backup_sitename, include_organization_authors=include_organization_authors)
+        metadata = extract_json(
+            schema,
+            metadata,
+            backup_sitename,
+            include_organization_authors=include_organization_authors,
+            page_headlines=page_headlines,
+        )
     return metadata
 
 

@@ -6,6 +6,7 @@ For reference, here is the list of all JSON-LD types: https://schema.org/docs/fu
 import json
 import logging
 import re
+from collections.abc import Collection
 from contextlib import suppress
 from html import unescape
 from re import Pattern
@@ -325,7 +326,12 @@ def _json_objects(parent: Any) -> list[dict[str, Any]]:
 
 
 def process_parent(
-    parent: Any, metadata: Document, backup_sitename: str | None = None, *, include_organization_authors: bool = True
+    parent: Any,
+    metadata: Document,
+    backup_sitename: str | None = None,
+    *,
+    include_organization_authors: bool = True,
+    page_headlines: Collection[str] = (),
 ) -> Document:
     "Find and extract selected metadata from JSON parts."
     webpage_name = None
@@ -400,7 +406,11 @@ def process_parent(
             # headline followed by site or section branding
             elif isinstance(metadata.title, str):
                 headline = content["name"] if "name" in content and content_type == "article" else content.get("headline")
-                if isinstance(headline, str) and headline.strip() and is_branded_headline(metadata.title, headline):
+                if (
+                    isinstance(headline, str)
+                    and headline.strip()
+                    and is_branded_headline(metadata.title, headline, page_headlines)
+                ):
                     metadata.title = headline
     if not backup_sitename and is_plausible_sitename(metadata, webpage_name, "webpage"):
         metadata.sitename = webpage_name
@@ -423,13 +433,22 @@ def is_schema_org_context(context: Any) -> bool:
 TITLE_SUFFIX_SEPARATORS = frozenset("|-–—·•")
 
 
-def is_branded_headline(title: str, headline: str) -> bool:
-    """True when a meta title is the article headline plus a separated suffix."""
+def is_branded_headline(title: str, headline: str, page_headlines: Collection[str] = ()) -> bool:
+    """True when a meta title is the article headline plus a separated suffix.
+
+    A title the page itself shows as its headline (``page_headlines``: the text of its h1 elements)
+    is no headline plus branding: the shorter JSON-LD headline is then a cut one ("... including 18"
+    for "... including 18 men and four women — but 27 of the 31 injuries ..."). After a pipe the rest
+    is a label whatever the page shows ("... | The Punter").
+    """
     title = " ".join(unescape(title).split())
     headline = " ".join(unescape(headline).split())
     if not headline or title == headline or not title.startswith(headline):
         return False
-    return title[len(headline) :].lstrip()[:1] in TITLE_SUFFIX_SEPARATORS
+    separator = title[len(headline) :].lstrip()[:1]
+    if separator != "|" and title.casefold() in page_headlines:
+        return False
+    return separator in TITLE_SUFFIX_SEPARATORS
 
 
 def extract_json_image(value: Any, references: dict[str, Any]) -> str | None:
@@ -451,6 +470,7 @@ def extract_json(
     backup_sitename: str | None = None,
     *,
     include_organization_authors: bool = True,
+    page_headlines: Collection[str] = (),
 ) -> Document:
     """Parse and extract metadata from JSON-LD data.
 
@@ -493,7 +513,13 @@ def extract_json(
                 if metadata.image:
                     break
 
-    return process_parent(parents, metadata, backup_sitename, include_organization_authors=include_organization_authors)
+    return process_parent(
+        parents,
+        metadata,
+        backup_sitename,
+        include_organization_authors=include_organization_authors,
+        page_headlines=page_headlines,
+    )
 
 
 def extract_json_author(elemtext: str, regular_expression: Pattern[str]) -> str | None:
