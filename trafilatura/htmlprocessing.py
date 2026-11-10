@@ -4,6 +4,7 @@ Functions to process nodes in HTML code.
 """
 
 import logging
+import re
 from copy import deepcopy
 
 from lxml.etree import Element, SubElement, XPath, _Element, strip_elements, strip_tags, tostring
@@ -75,7 +76,41 @@ def _handle_forms(tree: HtmlElement) -> None:
         if total and len(form.text_content()) > total / 2:
             form.tag = "div"
         else:
-            delete_element(form)
+            delete_element(_form_widget(form, total))
+
+
+# A form's widget: the short block around a sign-up, sign-in or subscription form ("Why
+# register?", "Registration is free", the field and its button), never a block holding prose.
+# A comment or search form goes alone: the comments next to it are not its widget.
+WIDGET_MAX_CHARS = 600
+WIDGET_LINE_MAX_CHARS = 100
+_ACCOUNT_FORM = re.compile(r"regist|log-?in|sign-?(?:in|up)|subscri|news-?letter", re.IGNORECASE)
+_OTHER_FORM = re.compile(r"comment|reply|search", re.IGNORECASE)
+
+
+def _account_form(form: HtmlElement) -> bool:
+    "A form that signs the reader up, in or on, by its id, class, action or name."
+    names = " ".join(form.get(attr) or "" for attr in ("id", "class", "action", "name"))
+    return _ACCOUNT_FORM.search(names) is not None and _OTHER_FORM.search(names) is None
+
+
+def _form_widget(form: HtmlElement, total: int) -> HtmlElement:
+    "The largest block around a sign-up form that holds nothing but its short texts."
+    widget = form
+    if not _account_form(form):
+        return widget
+    for parent in form.iterancestors():
+        length = len(trim(parent.text_content()))
+        if (
+            parent.tag not in ("div", "section", "aside")
+            or length > WIDGET_MAX_CHARS
+            or length * 3 > total
+            or parent.find(".//h1") is not None
+            or any(len(trim(p.text_content())) > WIDGET_LINE_MAX_CHARS for p in parent.iter("p", "li"))
+        ):
+            break
+        widget = parent
+    return widget
 
 
 # fallback or embedded copies: paragraphs inside them neither count as removed nor as surviving content

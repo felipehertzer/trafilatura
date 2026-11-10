@@ -5287,3 +5287,57 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+FORM_STORY = "".join(
+    f"<p>The council confirmed on Saturday that the new bridge will open to traffic next month. Paragraph {n} of the "
+    "story says more about the bridge works.</p>"
+    for n in range(6)
+)
+
+
+@pytest.mark.parametrize("fast", [False, True])
+@pytest.mark.parametrize(
+    "tail,dropped,kept",
+    [
+        # a registration box goes with its form
+        (
+            (
+                '<div class="paywall"><div class="register_box"><p>Register to continue</p><p>Why register?</p>'
+                "<ul><li>Registration is free and only takes a moment</li><li>Read 3 articles a month</li></ul>"
+                '<form action="/register"><input type="email"><button>Register</button></form></div></div>'
+            ),
+            ["Register to continue", "Why register?", "Registration is free"],
+            [],
+        ),
+        # a newsletter box known by its form's class
+        (
+            (
+                "<div><h3>Get the morning briefing</h3><p>Every weekday in your inbox.</p>"
+                '<form class="newsletter-signup"><input type="email"><button>Sign me up</button></form></div>'
+            ),
+            ["morning briefing", "Every weekday"],
+            [],
+        ),
+        # a block holding prose stays, only the form goes
+        (
+            (
+                "<div><p>The council will publish the final design and the full timetable of the works online once the "
+                "state treasurer has signed the funding agreement for the second stage.</p>"
+                '<form action="/subscribe"><input type="email"><button>Subscribe</button></form></div>'
+            ),
+            [],
+            ["signed the funding agreement"],
+        ),
+    ],
+    ids=["registration", "newsletter", "prose"],
+)
+def test_sign_up_form_widget(tail, dropped, kept, fast):
+    "The short block around a sign-up form goes with the form."
+    page = f"<html><body><article><h1>Bridge opens</h1>{FORM_STORY}{tail}</article></body></html>"
+    text = extract(page, fast=fast)
+    assert "Paragraph 5 of the story" in text
+    for string in dropped:
+        assert string not in text
+    for string in kept:
+        assert string in text
