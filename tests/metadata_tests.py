@@ -1125,3 +1125,34 @@ LANG_LD = (
 def test_markup_language(page, expected):
     "The language declared in the markup fills the metadata, the text is not analyzed here (#1183)."
     assert extract_metadata(page).language == expected
+
+
+@pytest.mark.parametrize(
+    ("card", "expected"),
+    [
+        # a card holding another story's linked headline
+        (
+            (
+                '<div class="root with-byline"><div class="teaser"><span class="teaser-keyword">Digital Editions</span>'
+                '<h3 class="teaser-title"><a href="/editions/friday">Example Chronicle, Friday, 6 November, 2026</a>'
+                "</h3></div></div>"
+            ),
+            None,
+        ),
+        # a card inside the link to its story
+        (
+            (
+                '<a class="teaser-link" href="/news/two-dead"><div class="teaser__container"><h3 class="teaser__title">'
+                'Two dead in crash</h3><div class="teaser__footer"><div class="teaser__author">By Ivy Example</div>'
+                "</div></div></a>"
+            ),
+            None,
+        ),
+        # an author box whose heading links to the author's page is the byline's own
+        ('<div class="author-box"><h4 class="author-name"><a href="/author/jane-doe">Jane Doe</a></h4></div>', "Jane Doe"),
+    ],
+)
+def test_byline_not_read_from_teaser(card, expected):
+    "A teaser card for another story is no byline."
+    page = f"<html><body><h1>Clubs a hive of activity</h1><p>Some text.</p><h2>Most popular</h2>{card}</body></html>"
+    assert extract_metadata(page).author == expected
