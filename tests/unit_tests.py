@@ -5327,3 +5327,48 @@ def test_hidden_continuation_behind_its_control(body, revealed, fast):
         assert (sentence in text) is revealed
     assert "Story continues" not in text
     assert "Continue reading" not in text
+
+
+LOADING_LEAD = "The regional council met on Tuesday evening to discuss the funding of three new bridges. " * 3
+LOADING_REST = [
+    "The engineers said the first bridge could open to traffic before the end of next winter, weather permitting.",
+    "Farmers on the northern side of the river welcomed the plan after years of long detours.",
+    "The second and third bridges depend on a state grant that will be decided in the autumn.",
+]
+
+
+def loading_page(notice, inner_heading=""):
+    "The rest of a story waits, hidden, behind a notice a script replaces, and part of it is hidden again."
+    return (
+        '<html><body><article><div class="content">'
+        f"<div><p>{LOADING_LEAD}</p></div><div>{notice}</div>"
+        f'<div style="display:none;"><p>{LOADING_REST[0]}</p>{inner_heading}'
+        f'<div style="display:none;"><p>{LOADING_REST[1]}</p><p>{LOADING_REST[2]}</p></div></div>'
+        "</div></article></body></html>"
+    )
+
+
+LOADING_NOTICE = "<p>Hold tight, we are checking permissions before loading more content</p>"
+
+
+@pytest.mark.parametrize("fast", [False, True])
+@pytest.mark.parametrize(
+    "notice,inner_heading,revealed",
+    [
+        (LOADING_NOTICE, "", True),
+        # a subheading before a part hidden again inside the story is the story's own
+        (LOADING_NOTICE, "<h2>What happens next</h2>", True),
+        # a notice holding a link is a prompt, not a stand-in for the text
+        ('<p>Subscribers only: <a href="/subscribe">subscribe to keep reading</a></p>', "", False),
+    ],
+    ids=["notice", "notice-subheading", "link"],
+)
+def test_hidden_story_behind_a_loading_notice(notice, inner_heading, revealed, fast):
+    "The story a short loading notice stands in for is text, the notice is not."
+    text = extract(loading_page(notice, inner_heading), fast=fast)
+    for sentence in LOADING_REST:
+        assert (sentence in text) is revealed
+    assert "Hold tight" not in text
+    assert ("Subscribers only" in text) is not revealed
+    if inner_heading:
+        assert "What happens next" in text

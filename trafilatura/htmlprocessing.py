@@ -85,23 +85,51 @@ UNDO_MAX_WORDS = 50
 
 # The rest of an article that a "continue reading" control reveals: a hidden block, last in its
 # container, right after an element that is nothing but that control, holding article paragraphs
-# and preceded by the visible ones. Hidden blocks are otherwise discarded as page furniture.
+# and preceded by the visible ones. Hidden blocks are otherwise discarded as page furniture. The
+# control may also be a short status notice with no link or button that a script replaces with the
+# text ("checking permissions before loading more content").
 HIDDEN_CONTINUATION_XPATH = XPath(
     """
     .//*[@hidden or @style][@hidden or contains(translate(@style, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ \t\r\n', 'abcdefghijklmnopqrstuvwxyz'),
     'display:none')][not(following-sibling::*)]
-    [preceding-sibling::*[1][self::button or (.//button and normalize-space() = normalize-space(.//button[1]))]]
+    [preceding-sibling::*[1][self::button or (.//button and normalize-space() = normalize-space(.//button[1]))
+    or (not(.//a) and not(.//button) and string-length(normalize-space()) > 0 and string-length(normalize-space()) < 100
+    and not(.//p[string-length(normalize-space()) > 80]))]]
     [count(.//p[string-length(normalize-space()) > 80]) >= 2]
     [preceding-sibling::*[descendant-or-self::p[string-length(normalize-space()) > 80]]]
     """
 )
 
 
+# a stand-in for the text: short, no link, no button, no paragraph of prose
+_STAND_IN_NOTICE = XPath(
+    "self::*[not(self::button) and not(.//a) and not(.//button) and string-length(normalize-space()) < 100"
+    " and not(.//p[string-length(normalize-space()) > 80])]"
+)
+_NESTED_CONTINUATION_XPATH = XPath(
+    """.//*[@hidden or contains(translate(@style, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ \t\r\n', 'abcdefghijklmnopqrstuvwxyz'),
+    'display:none')][not(following-sibling::*)][.//p]"""
+)
+
+
 def reveal_hidden_continuation(tree: HtmlElement) -> None:
-    "Un-hide the rest of an article kept behind a continue-reading control."
+    """Un-hide the rest of an article kept behind a continue-reading control. A notice that stands
+    in for the text until a script loads it goes: the text is there now (buttons go in cleaning).
+    Inside a part already revealed nothing stands in for anything: what precedes a part hidden again
+    there is the story's own (a subheading, a list)."""
+    revealed: set[HtmlElement] = set()
     for elem in HIDDEN_CONTINUATION_XPATH(tree):
-        elem.attrib.pop("hidden", None)
-        elem.attrib.pop("style", None)
+        # its own last block hidden again is the rest of the same story
+        for part in [elem, *_NESTED_CONTINUATION_XPATH(elem)]:
+            if part in revealed:
+                continue
+            in_story = any(ancestor in revealed for ancestor in part.iterancestors())
+            revealed.add(part)
+            part.attrib.pop("hidden", None)
+            part.attrib.pop("style", None)
+            notice = part.getprevious()
+            if not in_story and notice is not None and _STAND_IN_NOTICE(notice):
+                delete_element(notice, keep_tail=False)
 
 
 def tree_cleaning(tree: HtmlElement, options: Extractor) -> HtmlElement:
