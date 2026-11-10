@@ -335,6 +335,39 @@ def examine_title_element(
     return title, None, None
 
 
+# a separator between title segments
+TITLE_SEGMENT_SEPARATOR = re.compile(r"\s[|–—•·-]\s+")
+
+
+def _site_key(value: str) -> str:
+    value = re.sub(r"^the\s+", "", value.strip(), flags=re.IGNORECASE)
+    return re.sub(r"[^0-9a-z]+", "", value.casefold())
+
+
+def strip_site_prefix(title: str, sitename: str | None, hostname: str | None, tree: HtmlElement) -> str:
+    """Remove leading branding: a first segment naming the site, followed by the page's own headline.
+
+    "Example News - Bridge opens" with <h1>Bridge opens</h1> -> "Bridge opens" for site
+    "Example News". Without the headline match the rest may be a tagline
+    ("Example News | Local news for the region"), so it stays.
+    """
+    owners = [_site_key(sitename or "")]
+    if hostname:
+        owners.append(_site_key(hostname.removeprefix("www.").split(".", 1)[0]))
+        owners.append(_site_key(hostname.removeprefix("www.")))
+    owners = [owner for owner in owners if len(owner) >= 3]
+    normalized = " ".join(unescape(title).split())
+    separator = TITLE_SEGMENT_SEPARATOR.search(normalized)
+    if separator is None or _site_key(normalized[: separator.start()]) not in owners:
+        return title
+    rest = normalized[separator.end() :].strip()
+    headlines = [block_text(h1) for h1 in tree.xpath(".//h1")]
+    headlines += tree.xpath('.//*[@itemprop="headline"]/@content')
+    if len(rest) >= 10 and any(" ".join(headline.split()) == rest for headline in headlines):
+        return rest
+    return title
+
+
 def extract_title(tree: HtmlElement) -> str | None:
     """Extract the document title"""
     # only one h1-element: take it
@@ -547,6 +580,10 @@ def extract_metadata(
         mymatch = META_URL.match(metadata.url)
         if mymatch:
             metadata.sitename = mymatch[1]
+
+    # drop a leading branding segment copied from og:title or <title>
+    if metadata.title:
+        metadata.title = strip_site_prefix(metadata.title, metadata.sitename, metadata.hostname, tree)
 
     # categories
     if not metadata.categories:
