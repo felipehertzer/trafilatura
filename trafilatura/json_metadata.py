@@ -117,6 +117,32 @@ AUTHOR_DATELINE = re.compile(
     r"\s+(?:in|reporting\s+from)\s+[A-ZÀ-Þ][^,;|/&]*?(?:,\s*[A-ZÀ-Þ][^\s,;|/&]*)?"
     r"(?=\s+(?:and|with)\s+|\s*[,;|/&]|$)"
 )
+# Legal forms: a byline ending in one names a company, and the comma before one
+# ("Example Humor, Inc.") does not separate two names.
+AUTHOR_LEGAL_FORMS = frozenset(
+    {"inc", "llc", "llp", "ltd", "pty", "plc", "gmbh", "corp", "corporation", "limited", "incorporated", "bhd", "ulc", "pte"}
+)
+AUTHOR_LEGAL_COMMA = re.compile(
+    rf",\s*(?=(?:{'|'.join(sorted(AUTHOR_LEGAL_FORMS))})\b\.?\s*(?:[;|/&,]|$))", flags=re.IGNORECASE
+)
+# Two of these in one byline make it a sentence, not a name.
+AUTHOR_SENTENCE_WORDS = frozenset(
+    {
+        "the", "is", "are", "was", "were", "be", "been", "will", "would", "can", "could", "has", "have", "had",
+        "that", "this", "it", "its", "their", "they", "we", "you", "how", "why", "what", "when", "who", "not",
+        "after", "before", "while", "into", "about", "than", "more", "most", "just", "all", "here", "there",
+        "my", "your", "our", "his", "her", "him", "them", "she", "he", "do", "does", "did", "to", "for", "on",
+        "out", "up", "over", "if", "or", "but", "so",
+    }
+)  # fmt: skip
+# Some of them are personal names too ("Will", "Do My Lan"): in a byline written as
+# a name they are no sign of a sentence. Three of them are ("So You Think You Can Dance").
+AUTHOR_NAME_HOMOGRAPHS = frozenset({"will", "do", "my", "can", "he", "her", "you", "she", "so", "than"})
+NAME_PARTICLES = frozenset(
+    {"al", "bin", "binti", "da", "das", "de", "del", "della", "den", "der", "di", "do", "dos", "du", "la", "le", "ter",
+     "van", "von"}
+)  # fmt: skip
+AUTHOR_WORD = re.compile(r"[^\W\d_]+")
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -384,6 +410,22 @@ def normalize_json_values(value: Any) -> Any:
     return value
 
 
+def _is_name(author: str) -> bool:
+    """Whether a cleaned byline part can be a name: not a company, not a sentence."""
+    tokens = AUTHOR_WORD.findall(author)
+    words = [token.casefold() for token in tokens]
+    if not words or words[-1] in AUTHOR_LEGAL_FORMS:
+        return False
+    sentence = sum(word in AUTHOR_SENTENCE_WORDS for word in words)
+    # written as a name: every word capitalised, a particle ("van der") or a possessive ("EXN's")
+    if all(token[0].isupper() or word in NAME_PARTICLES or word == "s" for token, word in zip(tokens, words, strict=True)):
+        names = sum(word in AUTHOR_NAME_HOMOGRAPHS for word in words)
+        if names >= 3:
+            return False
+        sentence -= names
+    return sentence < 2 and not (sentence and len(words) >= 4)
+
+
 def normalize_authors(current_authors: str | None, author_string: str) -> str | None:
     """Normalize author info to focus on author names only"""
     new_authors = []
@@ -403,6 +445,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
     # remove html tags and email addresses
     author_string = AUTHOR_EMAIL.sub("", HTML_STRIP_TAGS.sub("", author_string))
     author_string = AUTHOR_DATELINE.sub("", author_string)
+    author_string = AUTHOR_LEGAL_COMMA.sub(" ", author_string)
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
         author = trim(author)
@@ -418,9 +461,9 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_PREFIX.sub("", author)
         author = AUTHOR_REMOVE_NUMBERS.sub("", author)
         author = AUTHOR_REMOVE_PREPOSITION.sub("", author)
-        # skip empty or improbably long strings
+        # skip empty or improbably long strings, companies and sentences
         # simple heuristics, regex or vowel tests also possible
-        if not author or (len(author) >= 50 and " " not in author and "-" not in author):
+        if not author or (len(author) >= 50 and " " not in author and "-" not in author) or not _is_name(author):
             continue
         # title case
         if not author[0].isupper():
