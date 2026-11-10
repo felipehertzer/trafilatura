@@ -1304,3 +1304,26 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    ("byline", "expected"),
+    [
+        # a company: the comma before its legal form separates no names
+        ("Example Humor, Inc.", None),
+        ("Jane Doe, Example Media Pty Ltd", "Jane Doe"),
+        # a sentence or a phrase
+        ("Care Workers Will Be Reclassified", None),
+        ("The council said it will", None),
+        ("You are going", None),
+        ("On The Attack", None),
+        ("So You Think You Can Dance", None),
+        # personal names holding words that are also function words
+        ("Do My Lan", "Do My Lan"),
+        ("Will Van Der Berg", "Will Van Der Berg"),
+        ("Maria Joana do Carmo", "Maria Joana do Carmo"),
+    ],
+)
+def test_normalize_authors_companies_and_sentences(byline, expected):
+    "A company or a sentence in the author field is no name."
+    assert normalize_authors(None, byline) == expected
