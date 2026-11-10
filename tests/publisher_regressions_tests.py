@@ -1208,3 +1208,14 @@ def test_a_syndicator_or_a_role_after_the_comma_is_no_second_author():
     assert normalize_authors(None, "JENNY GOUGH, year three teacher, Mansfield Primary School") == "Jenny Gough"
     # co-authors stay
     assert normalize_authors(None, "Natalie Musumeci, Stephen Council") == "Natalie Musumeci; Stephen Council"
+
+
+@pytest.mark.parametrize("meta_author", [None, "Site Admin"])
+def test_the_story_credit_is_read_under_a_headline_inside_a_block_bylines_skip(meta_author):
+    # the byline and the credit leave the same elements out; the credit still starts from the headline,
+    # also when a block that bylines skip (class "title") holds it
+    head = "<title>Bridge opens next month</title>"
+    if meta_author:
+        head += f'<meta name="author" content="{meta_author}">'
+    body = f'<div class="title"><h1>Bridge opens next month</h1></div><p>By Jane Doe</p><p>{PARAGRAPH * 2}</p>'
+    assert extract_metadata(page(head, body)).author == "Jane Doe"

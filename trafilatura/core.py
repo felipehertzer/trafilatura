@@ -38,6 +38,7 @@ from .utils import (
 from .xml import build_json_output, control_xml_output, delete_element, keeps_empty, xmltocsv, xmltotxt
 from .xpaths import (
     APPENDED_ARTICLES_XPATH,
+    RAW_TREE_PRUNE_NO_CONTAINER_XPATH,
     RAW_TREE_PRUNE_XPATH,
     REMOVE_COMMENTS_AND_LISTS_XPATH,
     REMOVE_COMMENTS_XPATH,
@@ -152,7 +153,12 @@ def _url_key(value: str | None) -> str:
     return re.sub(r"^https?://(?:www\.)?", "", value, flags=re.IGNORECASE).casefold()
 
 
-def prune_appended_articles(tree: HtmlElement, url: str | None) -> HtmlElement:
+def find_appended_containers(tree: HtmlElement) -> list[HtmlElement]:
+    "The infinite-scroll containers of a page. Most pages have none, and then nothing here concerns them."
+    return [container for expression in APPENDED_ARTICLES_XPATH for container in expression(tree)]
+
+
+def prune_appended_articles(tree: HtmlElement, url: str | None, containers: list[HtmlElement] | None = None) -> HtmlElement:
     """Keep the current article of an infinite-scroll container, dropping the follow-ups.
 
     Some themes append later stories after the article (``mvp-post-add``); others
@@ -163,10 +169,10 @@ def prune_appended_articles(tree: HtmlElement, url: str | None) -> HtmlElement:
     """
     keys = {_url_key(url)} | {_url_key(href) for href in tree.xpath('//link[@rel="canonical"]/@href')}
     keys.discard("")
-    for expression in APPENDED_ARTICLES_XPATH:
-        for container in expression(tree):
-            if container.getparent() is None:
-                continue
+    if containers is None:
+        containers = find_appended_containers(tree)
+    for container in containers:
+        if container.getparent() is not None:
             current = next(
                 (
                     element
@@ -178,8 +184,8 @@ def prune_appended_articles(tree: HtmlElement, url: str | None) -> HtmlElement:
             )
             if current is None:
                 continue
-            while current.getparent() is not container:
-                current = current.getparent()
+            while (parent := current.getparent()) is not None and parent is not container:
+                current = parent
             for child in list(container):
                 if child is not current and isinstance(child.tag, str):
                     child.drop_tree()
@@ -230,8 +236,10 @@ def trafilatura_sequence(
     is_forum = _forum_thread_page(tree)
     # raw-tree prune so the external extractors inherit it too: readability would otherwise
     # pick the longest appended article over the real one
-    tree = prune_appended_articles(tree, url)
-    tree = prune_unwanted_nodes(tree, RAW_TREE_PRUNE_XPATH)
+    containers = find_appended_containers(tree)
+    if containers:
+        tree = prune_appended_articles(tree, url, containers)
+    tree = prune_unwanted_nodes(tree, RAW_TREE_PRUNE_XPATH if containers else RAW_TREE_PRUNE_NO_CONTAINER_XPATH)
     # comments off: prune the raw tree so all stages inherit it, lists are still ol/ul here
     if not options.comments and (options.focus == "precision" or not is_forum):
         tree = prune_unwanted_nodes(tree, REMOVE_COMMENTS_AND_LISTS_XPATH)

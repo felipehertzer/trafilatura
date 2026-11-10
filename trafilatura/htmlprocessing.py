@@ -130,7 +130,7 @@ UNDO_MAX_WORDS = 50
 # above div#lockable-1).
 HIDDEN_CONTINUATION_XPATH = XPath(
     """
-    .//*[@hidden or contains(translate(@style, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ \t\r\n', 'abcdefghijklmnopqrstuvwxyz'),
+    .//*[@hidden or @style][@hidden or contains(translate(@style, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ \t\r\n', 'abcdefghijklmnopqrstuvwxyz'),
     'display:none')][not(following-sibling::*)]
     [preceding-sibling::*[1][self::button or (.//button and normalize-space() = normalize-space(.//button[1]))
     or (not(.//a) and not(.//button) and string-length(normalize-space()) > 0 and string-length(normalize-space()) < 100

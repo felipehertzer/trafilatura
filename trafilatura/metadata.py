@@ -20,7 +20,6 @@ from lxml.etree import XPath
 from lxml.html import HtmlElement, tostring
 
 from .baseline import block_text
-from .htmlprocessing import prune_unwanted_nodes
 from .json_metadata import (
     AUTHOR_LEGAL_FORMS,
     extract_json,
@@ -31,6 +30,7 @@ from .json_metadata import (
 )
 from .settings import Document, set_date_params
 from .utils import HTML_STRIP_TAGS, line_processing, load_html, safe_base_url, trim
+from .xml import delete_element
 from .xpaths import (
     AUTHOR_DISCARD_XPATHS,
     AUTHOR_XPATHS,
@@ -459,9 +459,19 @@ def extract_title(tree: HtmlElement) -> str | None:
     return title or None
 
 
-def extract_author(tree: HtmlElement) -> str | None:
+def byline_discards(tree: HtmlElement) -> set[HtmlElement]:
+    "The elements a byline is not read from. Evaluated once per page: the byline and the story credit share them."
+    return {elem for expression in AUTHOR_DISCARD_XPATHS for elem in expression(tree)}
+
+
+def extract_author(tree: HtmlElement, discarded: set[HtmlElement] | None = None) -> str | None:
     """Extract the document author(s)"""
-    subtree = prune_unwanted_nodes(deepcopy(tree), AUTHOR_DISCARD_XPATHS)
+    if discarded is None:
+        discarded = byline_discards(tree)
+    # a copy holds its elements in the order of the original: the discarded ones leave the copy
+    subtree = deepcopy(tree)
+    for elem in [copy for original, copy in zip(tree.iter(), subtree.iter(), strict=True) if original in discarded]:
+        delete_element(elem)  # the tail text is preserved
     author = extract_metainfo(subtree, AUTHOR_XPATHS, len_limit=120)
     if author:
         author = normalize_authors(None, author)
@@ -572,13 +582,17 @@ def _story_lines(
     return result[:STORY_CREDIT_LINES]
 
 
-def extract_story_credit(tree: HtmlElement, title: str | None) -> str | None:
+def extract_story_credit(tree: HtmlElement, title: str | None, discarded: set[HtmlElement] | None = None) -> str | None:
     """The names a story's own credit gives, between its headline (the h1 or h2 that is its title) and its first
     sentence, read as extract_author reads the page (AUTHOR_DISCARD_XPATHS left out)."""
     if not title:
         return None
     wanted = _normalize_space(title).casefold()
-    discarded = {elem for expression in AUTHOR_DISCARD_XPATHS for elem in expression(tree)}
+    # no heading is the title: nothing to read, and no need to look for what to leave out
+    if not any(_normalize_space(elem.text_content()).casefold() == wanted for elem in tree.iter("h1", "h2")):
+        return None
+    if discarded is None:
+        discarded = byline_discards(tree)
     headline = next(
         (
             elem
@@ -761,8 +775,10 @@ def extract_metadata(
         metadata.author = check_authors(metadata.author, author_blacklist)
     # author
     byline_author = None
+    discarded = None
     if not metadata.author:
-        byline_author = extract_author(tree)
+        discarded = byline_discards(tree)
+        byline_author = extract_author(tree, discarded)
         # a blacklisted byline is none ("Production North-Eastern Advertiser" over "By Rachel Williams")
         if byline_author and author_blacklist:
             byline_author = check_authors(byline_author, author_blacklist)
@@ -770,7 +786,7 @@ def extract_metadata(
     # The credit a story opens with names its writer. It fills a page without a byline, and it outranks a meta
     # or JSON-LD author naming someone else, the CMS account ("92.9 Voice FM Contributors" for "By: Adriana
     # Wales", "Christo" for "By Rebecca Dakin"); a byline the page marks as one stays.
-    if not byline_author and (credit := extract_story_credit(tree, metadata.title)):
+    if not byline_author and (credit := extract_story_credit(tree, metadata.title, discarded)):
         # normalize_authors must keep the whole credit: what it cuts was no name ("Whats On Australia")
         names = normalize_authors(None, credit)
         credit = names if names and _holds_names(names, credit.replace(" and ", " ")) else None

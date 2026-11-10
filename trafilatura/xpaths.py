@@ -227,6 +227,9 @@ RAW_TREE_PRUNE_XPATH = [
     # also matches the article body ("elementor-widget")
     XPath(".//*[self::div or self::section or self::aside][contains(@class, 'elementor-share-buttons')]"),
 ]
+# On a page without an infinite-scroll container (APPENDED_ARTICLES_XPATH finds none), the container
+# rule above has nothing to decide on: the rest of the list is enough.
+RAW_TREE_PRUNE_NO_CONTAINER_XPATH = RAW_TREE_PRUNE_XPATH[1:]
 
 
 # OVERALL_DISCARD_XPATH boilerplate token vocabulary, grouped by concept, composed via _alt()
@@ -535,50 +538,50 @@ AUTHOR_XPATHS = [
 ]
 
 
+# What a byline row holds beside the name. The tests that concern any element of the page are one
+# expression: they run on most pages, so the page is walked once, and each regular expression comes
+# after a native test that most elements fail.
+_BYLINE_DISCARDS = (
+    # comment counts, sections and labels
+    """
+    ((self::a or self::div or self::section or self::span) and (
+    @id='comments' or @class='comments' or @class='title' or @class='date' or
+    (@id and re:test(@id, '^comments|comment-?list|ProductReviews')) or
+    (@class and contains(@class, '-comments') and
+    re:test(@class, '(?:^|\\s)(?!(?:has|no|with|show|open|closed)-)[\\w]+-comments(?:\\s|$)')) or
+    (@class and re:test(@class, '^[Cc]omments|commentlist|comments-list|sidebar|is-hidden|quote|embedly-instagram|article-(?:share|support)|print|category|meta-date|meta-reviewer|meta-status')) or
+    contains(@data-component, 'Figure')))
+    """,
+    # a timestamp in the byline is not a name: AP's "Updated 3:34 PM AEDT,
+    # October 6, 2026" (<bsp-timestamp data-timestamp> in "Page-dateModified")
+    # gave the author "October 6"; an element that is or holds the author
+    # ("date-author": "Janic Cathomen, 01.12.2021") stays
+    """
+    ((@datetime or @data-timestamp or @data-date or @data-datetime or
+    (@itemprop and starts-with(@itemprop, 'date')) or
+    (@class and (contains(@class, 'date') or contains(@class, 'timestamp')) and
+    re:test(@class, '(?:^|[\\s_-])(?:date|timestamp|pubdate)(?:[A-Z\\s_-]|$)')) or
+    contains(local-name(), 'timestamp')) and
+    not(descendant-or-self::*[re:test(@class, '[Aa]uthor|[Bb]yline') or @rel='author' or @itemprop='author']))
+    """,
+    # a WordPress byline row holds the post's categories and tags
+    # ("By Mark Atterby Posted in Contact Centre & Channels")
+    """
+    (@class and contains(@class, '-links') and re:test(@class, '(?:^|\\s)(?:cat|tags?)-links(?:\\s|$)'))
+    """,
+    # a link the page marks as a tag (rel="tag", WordPress's rel="category tag") names a topic:
+    # "Articles · emotions · parenting advice" beside the credit in 929voice.fm's p.byline. WordPress
+    # marks the terms of every taxonomy so, a byline taxonomy too: a term link inside the element
+    # the page marks as the author (rel or itemprop "author", hAtom's class "author", an author-name
+    # class) is the name (elpais.cr's a.tdb-author-name > a[rel=tag] "Elpais.cr")
+    """
+    (@rel and re:test(@rel, '(?:^|\\s)tag(?:\\s|$)', 'i') and not(ancestor-or-self::*[
+    re:test(@rel, '(?:^|\\s)author(?:\\s|$)', 'i') or contains(@itemprop, 'author') or
+    re:test(@class, '(?:^|\\s)author(?:\\s|$)|[Aa]uthor-?[Nn]ame')]))
+    """,
+)
 AUTHOR_DISCARD_XPATHS = [
-    XPath(
-        """
-        .//*[self::a or self::div or self::section or self::span][
-        @id='comments' or @class='comments' or @class='title' or @class='date' or
-        (@id and re:test(@id, '^comments|comment-?list|ProductReviews')) or
-        (@class and re:test(@class, '(?:^|\\s)(?!(?:has|no|with|show|open|closed)-)[\\w]+-comments(?:\\s|$)')) or
-        (@class and re:test(@class, '^[Cc]omments|commentlist|comments-list|sidebar|is-hidden|quote|embedly-instagram|article-(?:share|support)|print|category|meta-date|meta-reviewer|meta-status')) or
-        contains(@data-component, 'Figure')]
-        """,
-        namespaces={"re": REGEXP_NS},
-    ),
-    XPath(
-        # a timestamp in the byline is not a name: AP's "Updated 3:34 PM AEDT,
-        # October 6, 2026" (<bsp-timestamp data-timestamp> in "Page-dateModified")
-        # gave the author "October 6"; an element that is or holds the author
-        # ("date-author": "Janic Cathomen, 01.12.2021") stays
-        """
-        .//*[@datetime or @data-timestamp or @data-date or @data-datetime or
-        starts-with(@itemprop, 'date') or contains(local-name(), 'timestamp') or
-        re:test(@class, '(?:^|[\\s_-])(?:date|timestamp|pubdate)(?:[A-Z\\s_-]|$)')]
-        [not(descendant-or-self::*[re:test(@class, '[Aa]uthor|[Bb]yline') or @rel='author' or @itemprop='author'])]
-        """,
-        namespaces={"re": REGEXP_NS},
-    ),
-    XPath(
-        # a WordPress byline row holds the post's categories and tags
-        # ("By Mark Atterby Posted in Contact Centre & Channels")
-        """.//*[re:test(@class, '(?:^|\\s)(?:cat|tags?)-links(?:\\s|$)')]""",
-        namespaces={"re": REGEXP_NS},
-    ),
-    XPath(
-        # a link the page marks as a tag (rel="tag", WordPress's rel="category tag") names a topic:
-        # "Articles · emotions · parenting advice" beside the credit in 929voice.fm's p.byline. WordPress
-        # marks the terms of every taxonomy so, a byline taxonomy too: a term link inside the element
-        # the page marks as the author (rel or itemprop "author", hAtom's class "author", an author-name
-        # class) is the name (elpais.cr's a.tdb-author-name > a[rel=tag] "Elpais.cr")
-        """
-        .//*[re:test(@rel, '(?:^|\\s)tag(?:\\s|$)', 'i')][not(ancestor-or-self::*[
-        re:test(@rel, '(?:^|\\s)author(?:\\s|$)', 'i') or contains(@itemprop, 'author') or
-        re:test(@class, '(?:^|\\s)author(?:\\s|$)|[Aa]uthor-?[Nn]ame')])]
-        """,
-        namespaces={"re": REGEXP_NS},
-    ),
+    XPath(f".//*[{' or '.join(_BYLINE_DISCARDS)}]", namespaces={"re": REGEXP_NS}),
     XPath("//time|//figure|//script|//style"),
 ]
 
