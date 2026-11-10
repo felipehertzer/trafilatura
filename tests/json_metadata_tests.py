@@ -1547,3 +1547,15 @@ def test_normalize_authors_datelines(byline, expected):
 def test_normalize_authors_credit_prefixes(byline, expected):
     "Credit prefixes are removed without turning their words into extra authors."
     assert normalize_authors(None, byline) == expected
+
+
+@pytest.mark.parametrize("author_string", ["Jane Doe<br>John Roe", "Jane Doe <br/>\nJohn Roe", "Jane Doe<BR />John Roe"])
+def test_normalize_authors_line_breaks(author_string):
+    "a line break separates the parts of a byline"
+    assert normalize_authors(None, author_string) == "Jane Doe; John Roe"
+
+
+def test_og_author_line_break():
+    "the OpenGraph author is read with its markup"
+    html = '<html><head><meta property="og:author" content="Jane Doe&lt;br&gt;John Roe"></head><body><p>x</p></body></html>'
+    assert extract_metadata(html).author == "Jane Doe; John Roe"
