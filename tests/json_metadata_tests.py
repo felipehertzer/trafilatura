@@ -1547,3 +1547,21 @@ def test_normalize_authors_datelines(byline, expected):
 def test_normalize_authors_credit_prefixes(byline, expected):
     "Credit prefixes are removed without turning their words into extra authors."
     assert normalize_authors(None, byline) == expected
+
+
+@pytest.mark.parametrize(
+    "author_string, expected",
+    [
+        ("example.com", None),
+        ("example.co.uk", None),
+        ("Example.so", None),
+        ("Jane Doe; news.example.com.au", "Jane Doe"),
+        # initials and titles joined by a dot stay names
+        ("J.R. Roe", "J R Roe"),
+        ("Dr.Roe", "Dr Roe"),
+        ("j.roe", "J Roe"),
+    ],
+)
+def test_normalize_authors_website_bylines(author_string, expected):
+    "a website named as the author is no person"
+    assert normalize_authors(None, author_string) == expected

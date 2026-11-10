@@ -113,6 +113,11 @@ AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+# A byline that is a website, its top-level domain in lower case ("example.so", "example.co.uk"); a name
+# with initials or a title ("J.R. Roe", "Dr.Roe") has a space or a capital after the dot.
+AUTHOR_DOMAIN_BYLINE = re.compile(
+    r"(?:www\.)?[\w-]+(?:\.[\w-]+)*\.(?:[a-z]{2}|com|net|org|info|news|media|online|site|biz|app|blog)"
+)
 AUTHOR_DATELINE = re.compile(
     r"\s+(?:in|reporting\s+from)\s+[A-ZÀ-Þ][^,;|/&]*?(?:,\s*[A-ZÀ-Þ][^\s,;|/&]*)?"
     r"(?=\s+(?:and|with)\s+|\s*[,;|/&]|$)"
@@ -410,6 +415,9 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_EMOJI_REMOVE.sub("", author)
         # remove @username
         author = AUTHOR_TWITTER.sub("", author)
+        # a website is no person
+        if AUTHOR_DOMAIN_BYLINE.fullmatch(author):
+            continue
         # replace special characters with space
         author = trim(AUTHOR_REPLACE_JOIN.sub(" ", author))
         author = AUTHOR_REMOVE_NICKNAME.sub("", author)
