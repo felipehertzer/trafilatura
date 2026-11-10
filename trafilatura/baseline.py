@@ -182,8 +182,6 @@ def _drop_interface(tree: HtmlElement) -> None:
     not its text. Ancestors come first, so a swallowing element that stays still loses the
     real controls inside it."""
     for elem in BASELINE_INTERFACE_XPATH(tree):
-        if elem.getroottree().getroot() is not tree:
-            continue  # inside an element already deleted
         text = len(" ".join(elem.text_content().split()))
         links = sum(len(" ".join(a.text_content().split())) for a in elem.iter("a"))
         if text - links <= _INTERFACE_MAX_TEXT:
