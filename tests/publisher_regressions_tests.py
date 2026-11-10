@@ -1270,3 +1270,22 @@ def test_a_job_title_is_read_after_the_credit_words(byline, author):
 )
 def test_and_inside_a_job_title_credits_no_one_else(byline, author):
     assert normalize_authors(None, byline) == author
+
+
+@pytest.mark.parametrize(
+    ("byline", "author"),
+    [
+        # "with" joins two people
+        ("Reged Ahmad with Richard Luscombe", "Reged Ahmad; Richard Luscombe"),
+        ("Danny Kemp with Anuj Chopra in Riyadh", "Danny Kemp; Anuj Chopra"),
+        ("Arthur Connan with Marie-Morgane LE MOEL", "Arthur Connan; Marie-Morgane LE MOEL"),
+        ("Victoria Lavelle, with Guillaume Souvant", "Victoria Lavelle; Guillaume Souvant"),
+        # before anything else it leads in what is no author
+        ("Jane Doe with Reuters", "Jane Doe"),
+        ("In paid partnership with Vypr", "In paid partnership"),
+        ("Leslie Fauvel with AFP bureaus in Abidjan", "Leslie Fauvel"),
+        ("AFP with Fox Sports", "AFP"),
+    ],
+)
+def test_with_joins_two_people_only_before_a_person(byline, author):
+    assert normalize_authors(None, byline) == author

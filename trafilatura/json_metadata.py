@@ -112,13 +112,16 @@ AUTHOR_REPLACE_JOIN = re.compile(r"[_+]|(?<!\d)\.|\.(?!\d)")
 # a nickname in quotes or brackets; an apostrophe inside a word ("CNN's Dana O'Neil") is no quote
 AUTHOR_REMOVE_NICKNAME = re.compile(r'["“({\[][^"”]+?[‘’"”\')\]}]|(?<![^\W\d_])[‘’\'][^"”]+?[‘’"”\')\]}](?![^\W\d_])')
 AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
-AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|—|-|–)\s+(.*)", flags=re.IGNORECASE)
+AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 # A date removed from a byline leaves its lead-in behind ("Jenny Smith on",
 # "Isabella DiBiase am"). Lower case only: a name capitalizes its particles.
-AUTHOR_TRAILING_PREPOSITION = re.compile(r"\s+(?:am|on|for|at|in|to|from|of|via|um|le|el|il)$")
+AUTHOR_TRAILING_PREPOSITION = re.compile(r"\s+(?:am|on|for|at|in|to|from|of|via|with|um|le|el|il)$")
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-# "with" joins two people too ("Reged Ahmad with Richard Luscombe").
-AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|·|•|(?:^|\W)[ua]nd(?:$|\W)|\bwith\b", flags=re.IGNORECASE)
+AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|·|•|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+# "with" joins two people too ("Reged Ahmad with Richard Luscombe"), but only before a person: what
+# else follows it is no author ("In paid partnership with Vypr", "Jane Doe with Reuters") and goes
+# with it, as after any preposition. At the start of a part it is a mere connector.
+AUTHOR_WITH = re.compile(r"(?:(^|[;|/,&•·])\s*|\s+)with\s+", flags=re.IGNORECASE)
 # "and" in Spanish, Portuguese, German and French wire credits ("Clara Preve e
 # Isabel Debre"); only between two full names, since "e" also joins Portuguese
 # surnames ("João e Silva").
@@ -646,6 +649,17 @@ def _separate_credits(author_string: str) -> str:
     return AUTHOR_SEGMENT.sub(lambda match: _strip_job_title(match.group()), author_string)
 
 
+def _separate_with(author_string: str) -> str:
+    """Separate the person a "with" joins to the one before: "Michael Mathes with Brendan Smialowski"."""
+
+    def separate(match: re.Match[str]) -> str:
+        if match[1] is not None:
+            return match[1] + " "
+        return "; " if _is_person_ahead(author_string[match.end() :]) else match.group()
+
+    return AUTHOR_WITH.sub(separate, author_string)
+
+
 def _is_name(author: str) -> bool:
     """Whether a cleaned byline part can be a name: not a company, not a sentence."""
     tokens = AUTHOR_WORD.findall(author)
@@ -698,7 +712,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
     author_string = HTML_STRIP_TAGS.sub("", AUTHOR_LINE_BREAK.sub(", ", author_string))
     # a byline may also credit visual contributors ("| Photography by X for WSJ")
     author_string = AUTHOR_VISUAL_CREDIT.sub("", author_string)
-    author_string = _separate_credits(author_string)
+    author_string = _separate_with(_separate_credits(author_string))
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
         author = trim(author)
