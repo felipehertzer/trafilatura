@@ -591,9 +591,8 @@ def _drop_trailing_furniture(
     for block, _, ancestors in recovered:
         for ancestor in ancestors:
             weight[ancestor] = weight.get(ancestor, 0) + len(_elem_text(block))
+    # the page's root holds all of it, so there is always a candidate
     candidates = [elem for elem, chars in weight.items() if chars >= STORY_REGION_SHARE * total]
-    if not candidates:
-        return
     region = max(candidates, key=lambda elem: sum(1 for _ in elem.iterancestors()))
     region_end = max(order.get(elem, -1) for elem in region.iter())
     cut = next((mark for mark in marks if mark > region_end), None)
