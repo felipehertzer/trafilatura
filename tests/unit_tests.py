@@ -5287,3 +5287,43 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+CONTINUATION_VISIBLE = (
+    "<div><p>"
+    + "The council approved the new budget after a long debate about the future of the town library. " * 3
+    + "</p><p>"
+    + "Members agreed that the reading rooms would stay open on weekends during the renovation. " * 3
+    + "</p></div>"
+)
+CONTINUATION_HIDDEN = (
+    '<div style="display: none"><p>'
+    + "Residents will be consulted on the final design before construction begins next spring. " * 2
+    + "</p><p>"
+    + "The mayor said the work should be finished in time for the centenary of the library in 2028. " * 2
+    + "</p></div>"
+)
+
+
+@pytest.mark.parametrize("fast", [False, True])
+@pytest.mark.parametrize(
+    "body,revealed",
+    [
+        # the control alone, then the rest of the article, last in its container
+        (CONTINUATION_VISIBLE + "<div><button>Story continues</button></div>" + CONTINUATION_HIDDEN, True),
+        (CONTINUATION_VISIBLE + "<button>Continue reading</button>" + CONTINUATION_HIDDEN, True),
+        # a dialog: its button comes with other text
+        (CONTINUATION_VISIBLE + "<div><p>We use cookies.</p><button>Accept</button></div>" + CONTINUATION_HIDDEN, False),
+        # not the last block of its container
+        (CONTINUATION_VISIBLE + "<button>Show</button>" + CONTINUATION_HIDDEN + "<div>Related stories</div>", False),
+    ],
+    ids=["control-in-block", "bare-control", "dialog", "not-last"],
+)
+def test_hidden_continuation_behind_its_control(body, revealed, fast):
+    "The rest of an article a continue-reading button reveals is text, other hidden blocks are not."
+    text = extract(f"<html><body><article>{body}</article></body></html>", fast=fast)
+    assert "reading rooms would stay open" in text
+    for sentence in ("consulted on the final design", "in time for the centenary"):
+        assert (sentence in text) is revealed
+    assert "Story continues" not in text
+    assert "Continue reading" not in text
