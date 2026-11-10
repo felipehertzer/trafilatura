@@ -1239,3 +1239,20 @@ def test_the_story_credit_is_read_under_a_headline_inside_a_block_bylines_skip(m
 )
 def test_a_name_may_hold_words_that_are_also_function_words(byline, author):
     assert normalize_authors(None, byline) == author
+
+
+@pytest.mark.parametrize(
+    ("byline", "author"),
+    [
+        # the surname is no job title: the name starts after the credit words
+        ("words: Jennie Officer", "Jennie Officer"),
+        ("Story by Jane Doe Political editor", "Jane Doe"),
+        ("By Staff Writer", "Staff Writer"),
+        ("Tom McIlroy Political editor", "Tom McIlroy"),
+        # after an outlet's possessive the title starts at once
+        ("CNN's Chief Media Analyst Brian Stelter", "CNN's Brian Stelter"),
+        ("From CNN's Chief Media Analyst Brian Stelter", "CNN's Brian Stelter"),
+    ],
+)
+def test_a_job_title_is_read_after_the_credit_words(byline, author):
+    assert normalize_authors(None, byline) == author

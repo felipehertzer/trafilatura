@@ -545,13 +545,18 @@ def _strip_job_title(segment: str) -> str:
     Chief political correspondent and Paul Karp" keeps Paul Karp.
     """
     tokens = segment.split()
-    # the name starts after a credit word ("By Staff Writer" is a role, not a name)
-    start = 1 if tokens and tokens[0].casefold() in {"by", "por", "par", "door", "von"} else 0
+    # the name starts after the credit words ("By Staff Writer" is a role, not a name; in "words: Jennie
+    # Officer" the surname is no role): the ones AUTHOR_PREFIX removes later, colon aside
+    prefix = AUTHOR_PREFIX.match(" ".join(tokens).replace(":", "") + " ")
+    start = len(prefix.group().split()) if prefix else 0
     role = next((index for index, token in enumerate(tokens) if token.casefold() in AUTHOR_ROLE_WORDS), None)
     if role is None or role < start + 2:
         return segment
+    # a name takes two words; after an outlet's possessive the title starts at once ("CNN's Chief Media
+    # Analyst Brian Stelter")
+    name_end = start + (1 if tokens[start].endswith(("'s", "’s")) else 2)
     end = role
-    while end > start + 2 and (tokens[end - 1].islower() or tokens[end - 1].casefold() in AUTHOR_TITLE_WORDS):
+    while end > name_end and (tokens[end - 1].islower() or tokens[end - 1].casefold() in AUTHOR_TITLE_WORDS):
         end -= 1
     return " " + " ".join(tokens[:end] + tokens[role + 1 :]) + " "
 
