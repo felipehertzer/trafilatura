@@ -1547,3 +1547,18 @@ def test_normalize_authors_datelines(byline, expected):
 def test_normalize_authors_credit_prefixes(byline, expected):
     "Credit prefixes are removed without turning their words into extra authors."
     assert normalize_authors(None, byline) == expected
+
+
+@pytest.mark.parametrize(
+    "author_string, expected",
+    [
+        ("Ann D'Arcy O'Neil", "Ann D'Arcy O'Neil"),
+        ("Ann D’Arcy O’Neil", "Ann D’Arcy O’Neil"),
+        ("From Example's Jane O'Neil in Atlanta", "Example's Jane O'Neil"),
+        # a nickname in single quotes still goes
+        ("Dana 'Dee' O'Neil", "Dana  O'Neil"),
+    ],
+)
+def test_normalize_authors_apostrophes_in_words(author_string, expected):
+    "an apostrophe inside a word does not open a nickname quote"
+    assert normalize_authors(None, author_string) == expected
