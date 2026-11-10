@@ -230,6 +230,9 @@ RAW_TREE_PRUNE_XPATH = [
     # also matches the article body ("elementor-widget")
     XPath(".//*[self::div or self::section or self::aside][contains(@class, 'elementor-share-buttons')]"),
 ]
+# On a page without an infinite-scroll container (APPENDED_ARTICLES_XPATH finds none), the container
+# rule above has nothing to decide on: the rest of the list is enough.
+RAW_TREE_PRUNE_NO_CONTAINER_XPATH = RAW_TREE_PRUNE_XPATH[1:]
 
 
 # OVERALL_DISCARD_XPATH boilerplate token vocabulary, grouped by concept, composed via _alt()
