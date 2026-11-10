@@ -408,6 +408,18 @@ AUTHOR_ID_ANY = re.compile("[Aa]uthor")
 AUTHOR_CLASS_ANY = re.compile("[Aa]uthor|screenname|writer|[Bb]yline")
 
 
+# A meta item's label is no name, and an element whose whole text is that label holds no value:
+# a block named "...__meta--author" holding the label p.entry__meta-title "Reading time"
+# over a widget the page's script fills
+AUTHOR_META_LABEL_CLASS = re.compile(r"meta[-_]+(?:title|label)(?:\s|$)")
+
+
+def _is_meta_label_only(elem: HtmlElement) -> bool:
+    "The element's whole text is the text of the first meta item label it holds."
+    label = next((sub for sub in elem.iterdescendants(Element) if AUTHOR_META_LABEL_CLASS.search(sub.get("class", ""))), None)
+    return label is not None and elem.text_content().split() == label.text_content().split()
+
+
 def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
     "Specific and almost specific author markers."
     return [
@@ -428,10 +440,13 @@ def _author_generic(tree: HtmlElement) -> list[HtmlElement]:
     return [
         elem
         for elem in tree.iter("a", "div", "h3", "h4", "p", "span")
-        if elem.get("class") in ("byline", "username", "byl", "BBL")
-        or "author" in elem.get("itemprop", "")
-        or AUTHOR_ID_GENERIC.search(elem.get("id", ""))
-        or AUTHOR_CLASS_GENERIC.search(elem.get("class", ""))
+        if (
+            elem.get("class") in ("byline", "username", "byl", "BBL")
+            or "author" in elem.get("itemprop", "")
+            or AUTHOR_ID_GENERIC.search(elem.get("id", ""))
+            or AUTHOR_CLASS_GENERIC.search(elem.get("class", ""))
+        )
+        and not _is_meta_label_only(elem)
     ]
 
 
@@ -440,10 +455,13 @@ def _author_any(tree: HtmlElement) -> list[HtmlElement]:
     return [
         elem
         for elem in tree.iter(Element)
-        if "Byline" in elem.get("data-component", "")
-        or "author" in elem.get("itemprop", "")
-        or AUTHOR_ID_ANY.search(elem.get("id", ""))
-        or AUTHOR_CLASS_ANY.search(elem.get("class", ""))
+        if (
+            "Byline" in elem.get("data-component", "")
+            or "author" in elem.get("itemprop", "")
+            or AUTHOR_ID_ANY.search(elem.get("id", ""))
+            or AUTHOR_CLASS_ANY.search(elem.get("class", ""))
+        )
+        and not _is_meta_label_only(elem)
     ]
 
 
