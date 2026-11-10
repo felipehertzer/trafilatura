@@ -1547,3 +1547,9 @@ def test_normalize_authors_datelines(byline, expected):
 def test_normalize_authors_credit_prefixes(byline, expected):
     "Credit prefixes are removed without turning their words into extra authors."
     assert normalize_authors(None, byline) == expected
+
+
+@pytest.mark.parametrize("author_string", ["Jane Doe · John Roe", "Jane Doe • John Roe", "Jane Doe·John Roe"])
+def test_normalize_authors_dot_separators(author_string):
+    "a middle dot or a bullet separates two names"
+    assert normalize_authors(None, author_string) == "Jane Doe; John Roe"
