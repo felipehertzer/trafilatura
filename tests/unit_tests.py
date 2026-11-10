@@ -5287,3 +5287,39 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+@pytest.mark.parametrize("fast", [False, True])
+def test_figure_prose_is_kept_without_images(fast):
+    "A figure's own paragraphs are text when images are off; its caption, credit and quoted post are not."
+    prose = [
+        "This texture spray recreates beachy hair without the dry crunchy feeling, and doubles as a light hair powder.",
+        "A leave-in conditioning spray that adds moisture, detangles and seals the cuticle after colour, every day.",
+        "This balm melts into the skin with coconut and jojoba oil, and it is the one thing everybody asks to borrow.",
+    ]
+    items = "".join(
+        f'<div class="item"><h2>{number}. Item {number}</h2><figure class="item__media">'
+        f'<img src="https://img.example.com/{number}.jpg"><div class="item__footer">'
+        '<span class="item__credit">Example Photos / Example Agency</span>'
+        f'<div class="item__description"><p>{text}</p><p>Buy it from Example Store for $4{number}.</p></div>'
+        "</div></figure></div>"
+        for number, text in enumerate(prose, 1)
+    )
+    others = (
+        '<figure><img src="a.jpg"><figcaption><p>The new bridge, seen from the river at dusk on Friday evening, '
+        "shortly before the lights were switched on for the first time.</p></figcaption></figure>"
+        '<figure><img src="b.jpg"><p>Photo: Example Photos</p></figure>'
+        '<figure class="embed"><blockquote><p>The bridge looks amazing tonight, well done to everyone who '
+        "worked on it over the last three years!</p></blockquote></figure>"
+    )
+    intro = "The council confirmed on Saturday that the new bridge will open to traffic next month. " * 2
+    my_html = (
+        f'<html><body><main><article><div class="post_content"><h1>Gifts</h1><p>{intro}</p>{items}{others}'
+        "</div></article></main></body></html>"
+    )
+    text = bare_extraction(my_html, fast=fast).text
+    for number, paragraph in enumerate(prose, 1):
+        assert paragraph in text
+        assert f"Buy it from Example Store for $4{number}." in text
+    for words in ("Example Agency", "dusk", "Example Photos", "amazing"):
+        assert words not in text
