@@ -5369,3 +5369,45 @@ def test_readability_without_the_own_paragraphs_still_wins_on_length():
     )
     text = bare_extraction(my_html).text
     assert "Detail 19" in text
+
+
+@pytest.mark.parametrize("count", [12, 20, 30])
+def test_readability_holding_the_rest_of_the_story_beside_the_own_text_wins(count):
+    "Story paragraphs readability holds in a block beside the own extraction are content, not chrome."
+    lead = "".join(
+        f"<p>Lead {number}: the council confirmed on Saturday that the new bridge number {number} will open to "
+        "traffic next month after the long repairs.</p>"
+        for number in range(8)
+    )
+    details = "".join(
+        f"<p>Detail {number}: engineers replaced the deck of the old bridge over the river and tested every one "
+        f"of its {number + 10} cables before the opening.</p>"
+        for number in range(count)
+    )
+    my_html = (
+        f"<html><body><article><h1>Bridge opens</h1>{lead}</article><div class='story-continued'>{details}</div></body></html>"
+    )
+    text = bare_extraction(my_html).text
+    assert "Lead 7" in text
+    assert f"Detail {count - 1}" in text
+
+
+def test_readability_holding_the_story_an_unclosed_element_swallowed_wins():
+    "The rest of a story swallowed by an unclosed caption, with no paragraphs left, is content, not chrome."
+    lead = "".join(
+        f"<p>Lead {number}: the council confirmed on Saturday that the new bridge number {number} will open to "
+        "traffic next month after the long repairs.</p>"
+        for number in range(9)
+    )
+    rest = "".join(
+        f"Detail {number}: engineers replaced the deck of the old bridge over the river and tested every one "
+        f"of its {number + 10} cables before the opening.<br><br>"
+        for number in range(12)
+    )
+    my_html = (
+        f"<html><body><div class='item-body'><div>{lead}</div><span class='caption'>The bridge at dawn. "
+        f"<a href='/photos'>Photo: Example Agency</a><br><br>{rest}</div></body></html>"
+    )
+    text = bare_extraction(my_html).text
+    assert "Lead 8" in text
+    assert "Detail 11" in text

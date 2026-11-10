@@ -4,6 +4,7 @@ Functions grounding on third-party software.
 """
 
 import logging
+import re
 from collections.abc import Iterator
 from copy import copy
 
@@ -43,23 +44,76 @@ def try_readability(htmlinput: HtmlElement) -> HtmlElement:
         return HtmlElement()
 
 
-# headings and list items readability holds between the own paragraphs, against the own text's length
+# headings, list items and story paragraphs readability holds that the own text lacks, against the own text's length
 MISSED_STRUCTURE_RATIO = 0.5
+# a story paragraph: long prose holding a sentence, not a teaser line or a menu entry
+STORY_PARAGRAPH_LENGTH = 80
+STORY_SENTENCE = re.compile(r"[.!?…][\"'’”)]?(?:\s|$)")
+# more prose than a teaser card holds: a run of story, in one paragraph or in a block of its own
+STORY_BLOCK_LENGTH = 400
+# elements whose text is a paragraph of its own, not part of the inline text of their parent
+BLOCK_TAGS = frozenset(
+    {"address", "article", "aside", "blockquote", "div", "dl", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5",
+     "h6", "header", "li", "main", "nav", "ol", "p", "pre", "section", "table", "ul"}
+)  # fmt: skip
+
+
+def _normalized_text(elem: _Element) -> str:
+    return " ".join("".join(elem.itertext()).split())
+
+
+def _opens_with_link(elem: _Element) -> bool:
+    "A teaser opens with the linked headline of the story it teases."
+    first = next(iter(elem), None)
+    return not (elem.text or "").strip() and first is not None and first.tag == "a"
+
+
+def _text_runs(block: _Element) -> list[tuple[str, bool]]:
+    """The paragraphs right under a block, in document order, each with whether it is a list item: its p and li
+    children (not teasers) and the inline text between its other block children, which holds the story when markup
+    lost its p tags (an unclosed inline element)."""
+    runs: list[tuple[list[str], bool]] = []
+    run: list[str] = []
+
+    def walk(node: _Element) -> None:
+        nonlocal run
+        run.append(node.text or "")
+        for child in node:
+            if isinstance(child.tag, str) and child.tag in BLOCK_TAGS:
+                runs.append((run, False))
+                run = []
+                if child.tag in ("li", "p") and not _opens_with_link(child):
+                    runs.append((list(child.itertext()), child.tag == "li"))
+            elif isinstance(child.tag, str):
+                walk(child)
+            run.append(child.tail or "")
+
+    walk(block)
+    runs.append((run, False))
+    return [(text, item) for text, item in ((" ".join("".join(parts).split()), item) for parts, item in runs) if text]
 
 
 def _wraps_own_extraction(body: _Element, algo_body: HtmlElement, algo_text: str, len_text: int, options: Extractor) -> bool:
-    """Own extraction is substantial and wholly contained in readability's output, which holds no headings
-    or lists of the article between its paragraphs.
+    """Own extraction is substantial and wholly contained in readability's output, which holds no headings,
+    lists or story of the article that the own text lacks.
 
     Readability then only adds page chrome around the same article (header,
-    captions, datelines), so its greater length is not missing content. Headings
-    and list items between the own paragraphs that the own text lacks are the
-    article's: the own extraction skipped them (text recovered without a body
-    frame keeps paragraphs only), and readability's length is content.
+    captions, datelines, teaser cards, menus), so its greater length is not
+    missing content. Headings and list items between the own paragraphs that the
+    own text lacks are the article's: the own extraction skipped them (text
+    recovered without a body frame keeps paragraphs only). So is story prose the
+    own text lacks: a paragraph, a list item or text whose p tags the markup
+    lost, between the own paragraphs, in the run that holds them (the own
+    extraction stopped early or skipped some), long enough on its own to be more
+    than a teaser, or adding up to as much in a block beside the own text (the
+    own extraction took the lead of a story whose body sits next to it). In these
+    cases readability's length is content. A teaser card holds a short paragraph
+    of its own or opens with the link to its story, and a site's menu sits in the
+    own text's wrapper: they stay chrome.
     """
     if len_text < 4 * options.min_extracted_size:
         return False
-    paragraphs = [" ".join("".join(p.itertext()).split()) for p in body.iter("p")]
+    paragraphs = [_normalized_text(p) for p in body.iter("p")]
     paragraphs = [p for p in paragraphs if len(p) >= 40]
     if len(paragraphs) < 3:
         return False
@@ -72,9 +126,36 @@ def _wraps_own_extraction(body: _Element, algo_body: HtmlElement, algo_text: str
     own = " ".join(" ".join(body.itertext()).split())
     missed = 0
     for elem in algo_body.iter("h1", "h2", "h3", "h4", "h5", "h6", "li"):
-        text = " ".join("".join(elem.itertext()).split())
+        text = _normalized_text(elem)
         if text and text not in own and first < algo_normalized.find(text) < last:
             missed += len(text)
+    # story paragraphs the own text lacks: between its paragraphs, in their run (the own extraction stopped early or
+    # skipped some), in a long run of prose, or in a block of their own beside it (the own extraction took the lead)
+    own_paragraphs = set(paragraphs)
+    for block in algo_body.iter(*BLOCK_TAGS - HEADINGS - {"li", "p"}):
+        texts = _text_runs(block)
+        story = [
+            (text, position, item)
+            for text, item in texts
+            if len(text) >= STORY_PARAGRAPH_LENGTH
+            and STORY_SENTENCE.search(text)
+            and text not in own
+            and not any(p in text for p in paragraphs)
+            and (position := algo_normalized.find(text)) >= 0
+        ]
+        if not story:
+            continue
+        own_run = any(text in own_paragraphs for text, _ in texts)
+        beside = sum(len(text) for text, _, _ in story) >= STORY_BLOCK_LENGTH and not any(
+            p in _normalized_text(block) for p in paragraphs
+        )
+        # list items between the own paragraphs are counted above
+        missed += sum(
+            len(text)
+            for text, position, item in story
+            if (own_run or beside or len(text) >= STORY_BLOCK_LENGTH or first < position < last)
+            and not (item and first < position < last)
+        )
     return missed < MISSED_STRUCTURE_RATIO * len_text
 
 
