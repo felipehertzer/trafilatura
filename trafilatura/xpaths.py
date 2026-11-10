@@ -384,6 +384,16 @@ COMMENTS_DISCARD_XPATH = [
 ### 2. METADATA
 
 
+# A teaser for another story is no byline. A candidate holding that story's headline with its link,
+# or sitting in a link around a card with a heading or a title, is the card. A heading naming the
+# author (an author class, rel="author") is the byline's own.
+_HEADING = "self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6"
+_NOT_TEASER = f"""
+        [not(descendant-or-self::*[{_HEADING}][descendant::a[@href] or ancestor::a[@href]]
+        [not(re:test(@class, '[Aa]uthor') or descendant::a[@rel='author' or re:test(@class, '[Aa]uthor')])])]
+        [not(ancestor::a[@href][descendant::*[{_HEADING} or re:test(@class, '(?:^|\\s)(?:title|headline)(?:\\s|$)')]])]
+"""
+
 # the order or depth of XPaths could be changed after exhaustive testing
 AUTHOR_XPATHS = [
     XPath(
@@ -404,7 +414,8 @@ AUTHOR_XPATHS = [
         contains(@itemprop, 'author') or
         (@id and re:test(@id, 'author|zuozhe|bianji|xiaobian')) or
         (@class and re:test(@class, 'author|channel-name|zuozhe|bianji|xiaobian|submitted-by|posted-by|journalist-name'))]
-        """,
+        """
+        + _NOT_TEASER,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
@@ -414,7 +425,8 @@ AUTHOR_XPATHS = [
         contains(@data-component, 'Byline') or contains(@itemprop, 'author') or
         (@id and re:test(@id, '[Aa]uthor')) or
         (@class and re:test(@class, '[Aa]uthor|screenname|writer|[Bb]yline'))]
-        """,
+        """
+        + _NOT_TEASER,
         namespaces={"re": REGEXP_NS},
     ),
 ]
