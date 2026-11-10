@@ -119,6 +119,7 @@ AUTHOR_DATELINE = re.compile(
     r"\s+(?:in|reporting\s+from)\s+[A-ZÀ-Þ][^,;|/&]*?(?:,\s*[A-ZÀ-Þ][^\s,;|/&]*)?"
     r"(?=\s+(?:and|with)\s+|\s*[,;|/&]|$)"
 )
+AUTHOR_LINE_BREAK = re.compile(r"\s*<br\s*/?>\s*", flags=re.IGNORECASE)
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -416,8 +417,8 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
     # fix html entities
     if "&#" in author_string or "&amp;" in author_string:
         author_string = unescape(author_string)
-    # remove html tags and email addresses
-    author_string = AUTHOR_EMAIL.sub("", HTML_STRIP_TAGS.sub("", author_string))
+    # remove html tags and email addresses; a line break separates the parts of a credit
+    author_string = AUTHOR_EMAIL.sub("", HTML_STRIP_TAGS.sub("", AUTHOR_LINE_BREAK.sub(", ", author_string)))
     author_string = AUTHOR_DATELINE.sub("", author_string)
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
