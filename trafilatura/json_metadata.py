@@ -121,10 +121,8 @@ AUTHOR_CREDENTIALS = frozenset(
     }
 )  # fmt: skip
 AUTHOR_CREDENTIAL_LIKE = re.compile(r"[A-Za-z]{2,5}\.?[®™]?")
-# A second person after a role: "Chief political correspondent and John Roe".
-AUTHOR_JOINED_NAME = re.compile(r"\s+(?:and|with)\s+(?=[A-ZÀ-Þ][^\W\d_]*\s+[A-ZÀ-Þ])")
-# A person's name ahead: two capitalised words ("John Roe", "Marie-Anne LE ROUX", "Dana O'Neil").
-AUTHOR_PERSON_AHEAD = re.compile(r"\s*([A-ZÀ-Þ](?:[^\W\d_]|['’-])*)\s+([A-ZÀ-Þ](?:[^\W\d_]|['’-])*)")
+# A second person after a role, two capitalised words captured: "Chief political correspondent and John Roe".
+AUTHOR_JOINED_NAME = re.compile(r"\s+(?:and|with)\s+(?=([A-ZÀ-Þ][^\W\d_]*)\s+([A-ZÀ-Þ](?:[^\W\d_]|['’-])*))")
 # A programme part after a comma: "Jane Doe, Episode 3".
 AUTHOR_EPISODE = re.compile(r"(?:episode|ep|part|series|season|chapter|vol(?:ume)?)\.?\s*\d+", flags=re.IGNORECASE)
 # A website after a comma: "Jane Doe, Example.com".
@@ -380,12 +378,9 @@ def _is_person_detail(segment: str) -> bool:
     return any(word.casefold() in AUTHOR_NOT_NAME_WORDS for word in AUTHOR_WORD.findall(text))
 
 
-def _is_person_ahead(text: str) -> bool:
-    """Whether a text opens with a person's name: two capitalised words, none of them a role or a
+def _is_person_ahead(match: re.Match[str]) -> bool:
+    """Whether the two capitalised words after "and" name a person: none of them a role or a
     word of an organisation ("John Roe", but not "Beauty Editor" or "Example Sports")."""
-    match = AUTHOR_PERSON_AHEAD.match(text)
-    if match is None:
-        return False
     words = {word.casefold() for name in match.groups() for word in AUTHOR_WORD.findall(name)}
     return not words & (AUTHOR_NOT_NAME_WORDS | AUTHOR_ROLE_WORDS)
 
@@ -413,10 +408,10 @@ def _drop_person_details(author_string: str) -> str:
                 in_role = True
                 # "Jane Doe, Chief political correspondent and John Roe" credits John Roe too,
                 # "Jane Doe, Weekend and Beauty Editor" credits no one else: the title goes on
-                joined = AUTHOR_JOINED_NAME.split(segment, maxsplit=1)
-                if len(joined) == 1 or not _is_person_ahead(joined[1]):
+                joined = AUTHOR_JOINED_NAME.search(segment)
+                if joined is None or not _is_person_ahead(joined):
                     continue
-                segment, in_role = " and " + joined[1], False
+                segment, in_role = " and " + segment[joined.end() :], False
             elif _is_person_detail(segment):
                 # an organisation ends the credit too: "Example School of Economics, Moscow"
                 in_role = not AUTHOR_CREDENTIAL_LIKE.fullmatch(segment.strip())
