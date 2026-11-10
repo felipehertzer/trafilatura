@@ -22,6 +22,7 @@ from lxml.html import HtmlElement, tostring
 from .baseline import block_text
 from .json_metadata import (
     AUTHOR_LEGAL_FORMS,
+    NAME_PARTICLES,
     extract_json,
     extract_json_parse_error,
     normalize_authors,
@@ -494,10 +495,6 @@ STORY_SENTENCE_WORDS = 15
 STORY_CREDIT_LINES = 12
 # a name's word: a capital and letters, with apostrophes, hyphens or an initial's dot ("O'Neil", "J.")
 NAME_WORD = re.compile(r"^[^\W\d_][^\W\d_'’.\-]*(?:['’.\-][^\W\d_]*)*\.?$")
-NAME_PARTICLES = frozenset(
-    {"al", "bin", "binti", "da", "das", "de", "del", "della", "den", "der", "di", "do", "dos", "du", "la", "le", "ter",
-     "van", "von"}
-)  # fmt: skip
 NAMES_JOIN = re.compile(r"\s+(?:and|&)\s+|,\s+")
 INLINE_TAGS = frozenset(
     {"a", "abbr", "b", "bdi", "bdo", "cite", "data", "del", "em", "font", "i", "img", "ins", "label", "mark", "q", "s",

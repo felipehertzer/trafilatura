@@ -1219,3 +1219,23 @@ def test_the_story_credit_is_read_under_a_headline_inside_a_block_bylines_skip(m
         head += f'<meta name="author" content="{meta_author}">'
     body = f'<div class="title"><h1>Bridge opens next month</h1></div><p>By Jane Doe</p><p>{PARAGRAPH * 2}</p>'
     assert extract_metadata(page(head, body)).author == "Jane Doe"
+
+
+@pytest.mark.parametrize(
+    ("byline", "author"),
+    [
+        # a function word that is also a personal name is no sign of a sentence in a byline written as a name
+        ("Do My Linh", "Do My Linh"),
+        ("Thi Kim Anh Do", "Thi Kim Anh Do"),
+        ("Will Van Der Merwe", "Will Van Der Merwe"),
+        ("CNN's Will Ripley", "CNN's Will Ripley"),
+        ("Maria João do Carmo", "Maria João do Carmo"),
+        # a phrase is none: other function words, lower case, or three such words
+        ("You are going", None),
+        ("On The Attack", None),
+        ("So You Think You Can Dance", None),
+        ("W willfaulkner profile photo Added By Will", None),
+    ],
+)
+def test_a_name_may_hold_words_that_are_also_function_words(byline, author):
+    assert normalize_authors(None, byline) == author

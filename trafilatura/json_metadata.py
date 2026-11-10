@@ -217,6 +217,13 @@ AUTHOR_SENTENCE_WORDS = frozenset(
         "out", "up", "over", "if", "or", "but", "so",
     }
 )  # fmt: skip
+# Some of them are personal names too ("Will Smith", "Anh Do", "Do My Linh", "He Jiankui"): in a byline
+# written as a name they are no sign of a sentence. Three of them are ("So You Think You Can Dance").
+AUTHOR_NAME_HOMOGRAPHS = frozenset({"will", "do", "my", "can", "he", "her", "you", "she", "so", "than"})
+NAME_PARTICLES = frozenset(
+    {"al", "bin", "binti", "da", "das", "de", "del", "della", "den", "der", "di", "do", "dos", "du", "la", "le", "ter",
+     "van", "von"}
+)  # fmt: skip
 AUTHOR_WORD = re.compile(r"[^\W\d_]+")
 # A column label in capitals that the publisher glued to the name ("CITY BEATChris
 # Herde", "CNNNeil Connell"): the label goes when two name words follow it. A brand
@@ -621,10 +628,17 @@ def _separate_credits(author_string: str) -> str:
 
 def _is_name(author: str) -> bool:
     """Whether a cleaned byline part can be a name: not a company, not a sentence."""
-    words = [word.casefold() for word in AUTHOR_WORD.findall(author)]
+    tokens = AUTHOR_WORD.findall(author)
+    words = [token.casefold() for token in tokens]
     if not words or words[-1] in AUTHOR_LEGAL_FORMS:
         return False
     sentence = sum(word in AUTHOR_SENTENCE_WORDS for word in words)
+    # written as a name: every word capitalised, a particle ("van der") or a possessive ("CNN's")
+    if all(token[0].isupper() or word in NAME_PARTICLES or word == "s" for token, word in zip(tokens, words, strict=True)):
+        names = sum(word in AUTHOR_NAME_HOMOGRAPHS for word in words)
+        if names >= 3:
+            return False
+        sentence -= names
     return sentence < 2 and not (sentence and len(words) >= 4)
 
 
