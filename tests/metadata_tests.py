@@ -1125,3 +1125,21 @@ LANG_LD = (
 def test_markup_language(page, expected):
     "The language declared in the markup fills the metadata, the text is not analyzed here (#1183)."
     assert extract_metadata(page).language == expected
+
+
+@pytest.mark.parametrize(
+    "meta",
+    [
+        '<meta property="og:title" content="{}"/>',
+        '<meta name="twitter:title" content="{}"/>',
+        '<meta itemprop="headline" content="{}"/>',
+    ],
+)
+def test_title_cut_at_a_quote(meta):
+    "an unescaped quote ends the meta attribute early, the title element holds the whole headline"
+    title = 'Mayor says the bridge is "ready to open" next month'
+    page = f"<html><head><title>{title}</title>{meta.format(title)}</head><body></body></html>"
+    assert extract_metadata(page).title == title
+    # a complete meta title stays, the title element may hold more than the headline
+    page = f"<html><head><title>Bridge opens | Example News</title>{meta.format('Bridge opens')}</head><body></body></html>"
+    assert extract_metadata(page).title == "Bridge opens"
