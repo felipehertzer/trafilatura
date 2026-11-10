@@ -1304,3 +1304,19 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    "current, author_string, expected",
+    [
+        (None, "Ben Roe; Benroe", "Ben Roe"),
+        (None, "Dana O’Neil; Dana O'Neil", "Dana O’Neil"),
+        (None, "Jean-Paul Roe; Jean Paul Roe", "Jean-Paul Roe"),
+        ("Dana O'Neil", "Dana O’Neil", "Dana O'Neil"),
+        # two people stay two people
+        (None, "Jane O’Neil; John O’Neil", "Jane O’Neil; John O’Neil"),
+    ],
+)
+def test_normalize_authors_same_name_spellings(current, author_string, expected):
+    "one name spelled with other apostrophes, hyphens or spaces is listed once"
+    assert normalize_authors(current, author_string) == expected

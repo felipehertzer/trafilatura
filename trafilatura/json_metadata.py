@@ -99,6 +99,7 @@ AUTHOR_REMOVE_NICKNAME = re.compile(r'["‘({\[’\'][^"]+?[‘’"\')\]}]')
 AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+AUTHOR_WORD = re.compile(r"[^\W\d_]+")
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
@@ -332,6 +333,11 @@ def normalize_json_values(value: Any) -> Any:
     return value
 
 
+def _name_key(author: str) -> str:
+    """The letters of a name: "Ben Roe", "Benroe" and "Ben-Roe" are one name."""
+    return "".join(AUTHOR_WORD.findall(author)).casefold()
+
+
 def normalize_authors(current_authors: str | None, author_string: str) -> str | None:
     """Normalize author info to focus on author names only"""
     new_authors = []
@@ -372,7 +378,10 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         # title case
         if not author[0].isupper():
             author = author.title()
-        if author not in new_authors:
+        # metadata fields may spell a name with other apostrophes, hyphens or spaces:
+        # keep the first spelling only
+        author_key = _name_key(author)
+        if not any(_name_key(name) == author_key for name in new_authors):
             new_authors.append(author)
     # keep only the fullest form of each name (drop names contained in another)
     new_authors = [n for n in new_authors if not any(n != m and n in m for m in new_authors)]
