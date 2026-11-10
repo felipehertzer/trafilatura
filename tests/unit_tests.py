@@ -5287,3 +5287,34 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+@pytest.mark.parametrize(
+    "picker",
+    [
+        "<p>Choose your country: <select>{options}</select></p>",
+        '<label>Country <select name="country">{options}</select></label>',
+    ],
+    ids=["in-paragraph", "in-label"],
+)
+def test_readability_ignores_the_options_of_a_country_picker(picker):
+    "The options of a form control are no prose: they must not outscore the article."
+    options = "".join(
+        f"<option>Country number {number}, with a long descriptive name, region and dialling code</option>"
+        for number in range(250)
+    )
+    paragraphs = "".join(
+        f"<p>Paragraph {number}: the council confirmed on Saturday that bridge number {number} "
+        "will open to traffic next month after the repairs.</p>"
+        for number in range(5)
+    )
+    my_html = (
+        f'<html><body><div class="signup">{picker.format(options=options)}</div>'
+        f'<div class="story">{paragraphs}</div></body></html>'
+    )
+    summary = ReadabilityDocument(load_html(my_html)).summary()
+    assert "bridge number 4" in summary
+    assert "Country number" not in summary
+    text = bare_extraction(my_html).text
+    assert "bridge number 4" in text
+    assert "Country number" not in text
