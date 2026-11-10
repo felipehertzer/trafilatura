@@ -100,6 +100,7 @@ AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+AUTHOR_LINE_BREAK = re.compile(r"\s*<br\s*/?>\s*", flags=re.IGNORECASE)
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -348,8 +349,8 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
     # fix html entities
     if "&#" in author_string or "&amp;" in author_string:
         author_string = unescape(author_string)
-    # remove html tags
-    author_string = HTML_STRIP_TAGS.sub("", author_string)
+    # remove html tags; a line break separates the parts of a credit
+    author_string = HTML_STRIP_TAGS.sub("", AUTHOR_LINE_BREAK.sub(", ", author_string))
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
         author = trim(author)
