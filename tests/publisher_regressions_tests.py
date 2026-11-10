@@ -1340,3 +1340,9 @@ def test_what_precedes_a_part_hidden_again_inside_the_story_stays(before):
     for sentence in LOCKED:
         assert sentence in text
     assert "Hold tight" not in text
+
+
+def test_a_colon_opens_a_subtitle_not_the_branding():
+    head = '<meta property="og:title" content="Coast v. Council: how do they compare?">'
+    head += ld({"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Coast v. Council"})
+    assert extract_metadata(page(head)).title == "Coast v. Council: how do they compare?"

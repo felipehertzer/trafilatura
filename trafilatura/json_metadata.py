@@ -386,7 +386,8 @@ def is_schema_org_context(context: Any) -> bool:
     return False
 
 
-TITLE_SUFFIX_SEPARATORS = frozenset("|-–—·•:")
+# a colon opens a subtitle ("Coinbase vs. Coinbase Pro: How do they compare?"), not the site's branding
+TITLE_SUFFIX_SEPARATORS = frozenset("|-–—·•")
 
 
 def is_branded_headline(title: str, headline: str) -> bool:
