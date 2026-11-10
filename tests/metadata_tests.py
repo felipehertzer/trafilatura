@@ -726,3 +726,16 @@ def test_block_boundaries_not_fused():
 
     inline = extract_metadata("<html><body><h1>Hyper<span>link</span>ed</h1></body></html>")
     assert inline.title == "Hyperlinked"
+
+
+@pytest.mark.parametrize(
+    "inner",
+    [
+        "<script>var story_id = 123; console.log(story_id);</script>",
+        "<style>.byline { display: block; }</style>",
+    ],
+)
+def test_author_without_script_and_style_text(inner):
+    "The code of a script or style element inside the byline is no name."
+    page = f'<html><body><span class="author">Jane Doe{inner}</span></body></html>'
+    assert extract_metadata(page).author == "Jane Doe"
