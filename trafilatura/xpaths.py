@@ -408,6 +408,11 @@ AUTHOR_ID_ANY = re.compile("[Aa]uthor")
 AUTHOR_CLASS_ANY = re.compile("[Aa]uthor|screenname|writer|[Bb]yline")
 
 
+# A WordPress post container (hAtom "hentry", "status-publish") is never the byline,
+# but its taxonomy classes can name authors ("author_tags-jane-roe").
+AUTHOR_POST_CONTAINER = re.compile(r"(?:^|\s)(?:hentry|status-publish)(?:\s|$)")
+
+
 def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
     "Specific and almost specific author markers."
     return [
@@ -428,10 +433,13 @@ def _author_generic(tree: HtmlElement) -> list[HtmlElement]:
     return [
         elem
         for elem in tree.iter("a", "div", "h3", "h4", "p", "span")
-        if elem.get("class") in ("byline", "username", "byl", "BBL")
-        or "author" in elem.get("itemprop", "")
-        or AUTHOR_ID_GENERIC.search(elem.get("id", ""))
-        or AUTHOR_CLASS_GENERIC.search(elem.get("class", ""))
+        if (
+            elem.get("class") in ("byline", "username", "byl", "BBL")
+            or "author" in elem.get("itemprop", "")
+            or AUTHOR_ID_GENERIC.search(elem.get("id", ""))
+            or AUTHOR_CLASS_GENERIC.search(elem.get("class", ""))
+        )
+        and not AUTHOR_POST_CONTAINER.search(elem.get("class", ""))
     ]
 
 
@@ -440,10 +448,13 @@ def _author_any(tree: HtmlElement) -> list[HtmlElement]:
     return [
         elem
         for elem in tree.iter(Element)
-        if "Byline" in elem.get("data-component", "")
-        or "author" in elem.get("itemprop", "")
-        or AUTHOR_ID_ANY.search(elem.get("id", ""))
-        or AUTHOR_CLASS_ANY.search(elem.get("class", ""))
+        if (
+            "Byline" in elem.get("data-component", "")
+            or "author" in elem.get("itemprop", "")
+            or AUTHOR_ID_ANY.search(elem.get("id", ""))
+            or AUTHOR_CLASS_ANY.search(elem.get("class", ""))
+        )
+        and not AUTHOR_POST_CONTAINER.search(elem.get("class", ""))
     ]
 
 
