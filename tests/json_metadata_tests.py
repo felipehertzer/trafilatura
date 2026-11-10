@@ -1304,3 +1304,18 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    "author_string, expected",
+    [
+        ("Jane Doe | Photography by John Roe for Example Weekly", "Jane Doe"),
+        ("Jane Doe and Illustrations by John Roe", "Jane Doe"),
+        ("Jane Doe, Video by John Roe", "Jane Doe"),
+        ("Jane Doe; Graphics by John Roe", "Jane Doe"),
+        ("Photos by John Roe", None),
+    ],
+)
+def test_normalize_authors_visual_credits(author_string, expected):
+    "photo, video and illustration credits in a byline do not name authors"
+    assert normalize_authors(None, author_string) == expected

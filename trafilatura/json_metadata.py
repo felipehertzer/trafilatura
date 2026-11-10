@@ -92,6 +92,11 @@ JSON_HEADLINE = re.compile(r'"headline": ?"([^"\\]+)', re.DOTALL)
 JSON_SEQ = [('"name"', JSON_NAME), ('"headline"', JSON_HEADLINE)]
 
 AUTHOR_PREFIX = re.compile(r"^([a-zäöüß]+(ed|t))? ?(written by|words by|words|by|von|from) ", flags=re.IGNORECASE)
+AUTHOR_VISUAL_CREDIT = re.compile(
+    r"(?:\s*[|,;/]|\s+(?:and|with))?\s*\b(?:photography|photos?|pictures?|illustrations?|graphics?|video|visuals?)"
+    r"\s+by\b.*$",
+    flags=re.IGNORECASE,
+)
 AUTHOR_REMOVE_NUMBERS = re.compile(r"\d.+?$")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
 AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
@@ -350,6 +355,8 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author_string = unescape(author_string)
     # remove html tags
     author_string = HTML_STRIP_TAGS.sub("", author_string)
+    # a byline may also credit visual contributors ("| Photography by X for Y")
+    author_string = AUTHOR_VISUAL_CREDIT.sub("", author_string)
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
         author = trim(author)
