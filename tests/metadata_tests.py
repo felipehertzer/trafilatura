@@ -726,3 +726,20 @@ def test_block_boundaries_not_fused():
 
     inline = extract_metadata("<html><body><h1>Hyper<span>link</span>ed</h1></body></html>")
     assert inline.title == "Hyperlinked"
+
+
+@pytest.mark.parametrize(
+    "links",
+    [
+        '<span class="cat-links">Posted in <a href="/category/contact-centres/">Contact Centres &amp; Channels</a></span>',
+        '<span class="tags-links">Tagged <a href="/tag/bridges/">Bridges</a>, <a href="/tag/roads/">Roads</a></span>',
+        '<div class="entry-meta tag-links">Filed under <a href="/tag/roads/">Roads</a></div>',
+    ],
+)
+def test_byline_without_category_and_tag_links(links):
+    "The post's categories and tags in the byline row are no authors."
+    byline = (
+        '<div class="byline">By <span class="author vcard"><a class="url fn n" href="/author/mark/">Mark Example</a>'
+        f"</span> {links}</div>"
+    )
+    assert extract_metadata(f"<html><body>{byline}</body></html>").author == "Mark Example"
