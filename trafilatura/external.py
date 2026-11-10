@@ -43,6 +43,41 @@ def try_readability(htmlinput: HtmlElement) -> HtmlElement:
         return HtmlElement()
 
 
+# headings and list items readability holds between the own paragraphs, against the own text's length
+MISSED_STRUCTURE_RATIO = 0.5
+
+
+def _wraps_own_extraction(body: _Element, algo_body: HtmlElement, algo_text: str, len_text: int, options: Extractor) -> bool:
+    """Own extraction is substantial and wholly contained in readability's output, which holds no headings
+    or lists of the article between its paragraphs.
+
+    Readability then only adds page chrome around the same article (header,
+    captions, datelines), so its greater length is not missing content. Headings
+    and list items between the own paragraphs that the own text lacks are the
+    article's: the own extraction skipped them (text recovered without a body
+    frame keeps paragraphs only), and readability's length is content.
+    """
+    if len_text < 4 * options.min_extracted_size:
+        return False
+    paragraphs = [" ".join("".join(p.itertext()).split()) for p in body.iter("p")]
+    paragraphs = [p for p in paragraphs if len(p) >= 40]
+    if len(paragraphs) < 3:
+        return False
+    algo_normalized = " ".join(algo_text.split())
+    starts = [algo_normalized.find(p) for p in paragraphs]
+    if min(starts) < 0:
+        return False
+    first = min(starts)
+    last = max(start + len(p) for start, p in zip(starts, paragraphs, strict=True))
+    own = " ".join(" ".join(body.itertext()).split())
+    missed = 0
+    for elem in algo_body.iter("h1", "h2", "h3", "h4", "h5", "h6", "li"):
+        text = " ".join("".join(elem.itertext()).split())
+        if text and text not in own and first < algo_normalized.find(text) < last:
+            missed += len(text)
+    return missed < MISSED_STRUCTURE_RATIO * len_text
+
+
 def _prefer_readability(
     body: _Element,
     algo_body: HtmlElement,
@@ -61,8 +96,13 @@ def _prefer_readability(
     return (
         # own text empty
         len_text == 0
-        # readability much longer, unless it grabbed raw JSON (#632)
-        or (len_algo > 2 * len_text and not algo_text.startswith("{"))
+        # readability much longer, unless it grabbed raw JSON (#632) or only
+        # wraps a substantial own extraction in page chrome
+        or (
+            len_algo > 2 * len_text
+            and not algo_text.startswith("{")
+            and not _wraps_own_extraction(body, algo_body, algo_text, len_text, options)
+        )
         # own extraction structurally deficient: no paragraph text or table-dominated
         or (
             len_algo > options.min_extracted_size * 2

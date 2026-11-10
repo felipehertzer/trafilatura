@@ -5287,3 +5287,65 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+def bridge_paragraphs(count):
+    return "".join(
+        f"<p>Paragraph {number}: the council confirmed on Saturday that bridge number {number} "
+        "will open to traffic next month after the repairs.</p>"
+        for number in range(count)
+    )
+
+
+@pytest.mark.parametrize(
+    "chrome",
+    [
+        # story teasers repeated under every article
+        "".join(
+            f'<div class="card"><p>Teaser {number}: a long summary of another story about the weather, the markets '
+            "and the local sport results this weekend, written for the front page of the site.</p></div>"
+            for number in range(50)
+        ),
+        # a site menu set as paragraphs
+        "".join(
+            f"<p>Section {number}: news, features, opinion, sport, business, culture and travel "
+            "from around the region, updated every hour of the day.</p>"
+            for number in range(60)
+        ),
+    ],
+    ids=["teasers", "menu"],
+)
+def test_readability_only_wrapping_the_own_story_in_chrome_does_not_win(chrome):
+    "Readability is not preferred for its length when it holds the whole own extraction plus page chrome."
+    my_html = (
+        f'<html><body><div class="wrap"><div class="article-body">{bridge_paragraphs(30)}</div>{chrome}</div></body></html>'
+    )
+    text = bare_extraction(my_html).text
+    assert "bridge number 29" in text
+    assert "Teaser" not in text
+    assert "Section" not in text
+
+
+def test_readability_holding_headings_and_lists_between_the_own_paragraphs_wins():
+    "Headings and lists that readability holds between the own paragraphs are the story's."
+    towns = ["Springfield", "Riverton", "Lakeside", "Hillcrest", "Fairview", "Maplewood"]
+    stops = "".join(
+        f"<h2>{day}. Route: to {town}</h2><p>Day {day} starts in {town}, a quiet ranching town where the road follows "
+        f"an old rail line past dry creeks, mesquite flats and a bar in {town} that still opens on weekends.</p>"
+        f"<h3>Adventures in {town}</h3><ul>"
+        + "".join(
+            f"<li>Hikers leaving {town} on day {day} reach summit trail number {trail} and its old fire lookout "
+            f"after a steady climb of {trail + 3} hours, with views across three ranges.</li>"
+            for trail in range(3)
+        )
+        + "</ul>"
+        for day, town in enumerate(towns, 1)
+    )
+    my_html = (
+        '<html><body><div class="article-template"><div class="body-content"><div>Published November 2, 2022</div>'
+        f'</div><div class="o-wrap"><p>Heading into the desert at dusk (Photo: Example/Agency)</p>{stops}</div></div>'
+        "</body></html>"
+    )
+    text = bare_extraction(my_html).text
+    assert "Route: to Lakeside" in text
+    assert "summit trail number 2" in text
