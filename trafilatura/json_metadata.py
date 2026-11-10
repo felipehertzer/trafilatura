@@ -100,6 +100,30 @@ AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+AUTHOR_ROLE_WORDS = frozenset(
+    {
+        "editor", "correspondent", "reporter", "writer", "journalist", "producer", "columnist", "presenter",
+        "host", "contributor", "critic", "photographer", "spokesperson", "spokesman", "spokeswoman",
+        "commentator", "analyst", "anchor", "director", "manager", "professor", "fellow", "lecturer",
+        "researcher", "historian", "founder", "officer", "economist", "scientist", "president", "chair",
+        "adviser", "advisor", "consultant", "coordinator", "teacher", "ceo", "cmo", "cto", "cfo", "coo",
+    }
+)  # fmt: skip
+# words of an organisation's name, never of a person's
+AUTHOR_NOT_NAME_WORDS = frozenset(
+    {
+        "news", "desk", "team", "staff", "group", "media", "network", "solutions", "services", "systems",
+        "labs", "university", "college", "school", "institute", "international", "online", "magazine", "radio",
+        "sports", "football", "motoring",
+    }
+)  # fmt: skip
+# A column label in capitals glued to the name ("CITY BEATJane Doe", "EXNJane Doe"):
+# the label goes when two name words follow it. A brand written the same way
+# ("SUPERCentral", "EXFocus Editor", "EXUniversity Example") leaves one word, or
+# words that do not name a person.
+AUTHOR_GLUED_LABEL = re.compile(
+    r"(?:[A-Z]{2,}\s+)*[A-Z]{2,}(?=([A-Z](?:[a-z]|['’][A-Z])[\w'’-]*) ([A-Z](?:[a-z]|['’][A-Z])[\w'’-]*)$)"
+)
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -332,6 +356,17 @@ def normalize_json_values(value: Any) -> Any:
     return value
 
 
+def _drop_glued_label(author: str) -> str:
+    """Drop a capitals label glued to a two-word name: "CITY BEATJane Doe" -> "Jane Doe"."""
+    match = AUTHOR_GLUED_LABEL.match(author)
+    if match is None:
+        return author
+    words = {match[1].casefold(), match[2].casefold()}
+    if words & (AUTHOR_NOT_NAME_WORDS | AUTHOR_ROLE_WORDS):
+        return author
+    return author[match.end() :]
+
+
 def normalize_authors(current_authors: str | None, author_string: str) -> str | None:
     """Normalize author info to focus on author names only"""
     new_authors = []
@@ -363,6 +398,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         # remove special characters
         author = AUTHOR_REMOVE_SPECIAL.sub("", author)
         author = AUTHOR_PREFIX.sub("", author)
+        author = _drop_glued_label(author)
         author = AUTHOR_REMOVE_NUMBERS.sub("", author)
         author = AUTHOR_REMOVE_PREPOSITION.sub("", author)
         # skip empty or improbably long strings
