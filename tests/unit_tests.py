@@ -5719,3 +5719,127 @@ def test_tree_input_baseline(body):
     assert html2txt(tree) == html2txt(page)
     assert baseline(tree)[1] == baseline(page)[1]
     assert etree.tostring(tree) == before
+
+
+def bridge_paragraphs(count):
+    return "".join(
+        f"<p>Paragraph {number}: the council confirmed on Saturday that bridge number {number} "
+        "will open to traffic next month after the repairs.</p>"
+        for number in range(count)
+    )
+
+
+@pytest.mark.parametrize(
+    "chrome",
+    [
+        # story teasers repeated under every article
+        "".join(
+            f'<div class="card"><p>Teaser {number}: a long summary of another story about the weather, the markets '
+            "and the local sport results this weekend, written for the front page of the site.</p></div>"
+            for number in range(50)
+        ),
+        # a site menu set as paragraphs
+        "".join(
+            f"<p>Section {number}: news, features, opinion, sport, business, culture and travel "
+            "from around the region, updated every hour of the day.</p>"
+            for number in range(60)
+        ),
+    ],
+    ids=["teasers", "menu"],
+)
+def test_readability_only_wrapping_the_own_story_in_chrome_does_not_win(chrome):
+    "Readability is not preferred for its length when it holds the whole own extraction plus page chrome."
+    my_html = (
+        f'<html><body><div class="wrap"><div class="article-body">{bridge_paragraphs(30)}</div>{chrome}</div></body></html>'
+    )
+    text = bare_extraction(my_html).text
+    assert "bridge number 29" in text
+    assert "Teaser" not in text
+    assert "Section" not in text
+
+
+def test_readability_holding_headings_and_lists_between_the_own_paragraphs_wins():
+    "Headings and lists that readability holds between the own paragraphs are the story's."
+    towns = ["Springfield", "Riverton", "Lakeside", "Hillcrest", "Fairview", "Maplewood"]
+    stops = "".join(
+        f"<h2>{day}. Route: to {town}</h2><p>Day {day} starts in {town}, a quiet ranching town where the road follows "
+        f"an old rail line past dry creeks, mesquite flats and a bar in {town} that still opens on weekends.</p>"
+        f"<h3>Adventures in {town}</h3><ul>"
+        + "".join(
+            f"<li>Hikers leaving {town} on day {day} reach summit trail number {trail} and its old fire lookout "
+            f"after a steady climb of {trail + 3} hours, with views across three ranges.</li>"
+            for trail in range(3)
+        )
+        + "</ul>"
+        for day, town in enumerate(towns, 1)
+    )
+    my_html = (
+        '<html><body><div class="article-template"><div class="body-content"><div>Published November 2, 2022</div>'
+        f'</div><div class="o-wrap"><p>Heading into the desert at dusk (Photo: Example/Agency)</p>{stops}</div></div>'
+        "</body></html>"
+    )
+    text = bare_extraction(my_html).text
+    assert "Route: to Lakeside" in text
+    assert "summit trail number 2" in text
+
+
+def test_readability_without_the_own_paragraphs_still_wins_on_length():
+    "Readability's much longer text is not chrome around the own extraction when it does not hold it."
+    lead = "".join(
+        f"<p>Lead {number}: the council confirmed on Saturday that the new bridge number {number} will open to "
+        "traffic next month after the long repairs.</p>"
+        for number in range(8)
+    )
+    details = "".join(
+        f"<p>Detail {number}: engineers replaced the deck of the old bridge over the river and tested every one "
+        f"of its {number + 10} cables before the opening.</p>"
+        for number in range(20)
+    )
+    my_html = (
+        f"<html><body><div class='main'><article><h1>Bridge opens</h1>{lead}</article></div>"
+        f"<div class='other'><div class='story-continued'>{details}</div></div></body></html>"
+    )
+    text = bare_extraction(my_html).text
+    assert "Detail 19" in text
+
+
+@pytest.mark.parametrize("count", [12, 20, 30])
+def test_readability_holding_the_rest_of_the_story_beside_the_own_text_wins(count):
+    "Story paragraphs readability holds in a block beside the own extraction are content, not chrome."
+    lead = "".join(
+        f"<p>Lead {number}: the council confirmed on Saturday that the new bridge number {number} will open to "
+        "traffic next month after the long repairs.</p>"
+        for number in range(8)
+    )
+    details = "".join(
+        f"<p>Detail {number}: engineers replaced the deck of the old bridge over the river and tested every one "
+        f"of its {number + 10} cables before the opening.</p>"
+        for number in range(count)
+    )
+    my_html = (
+        f"<html><body><article><h1>Bridge opens</h1>{lead}</article><div class='story-continued'>{details}</div></body></html>"
+    )
+    text = bare_extraction(my_html).text
+    assert "Lead 7" in text
+    assert f"Detail {count - 1}" in text
+
+
+def test_readability_holding_the_story_an_unclosed_element_swallowed_wins():
+    "The rest of a story swallowed by an unclosed caption, with no paragraphs left, is content, not chrome."
+    lead = "".join(
+        f"<p>Lead {number}: the council confirmed on Saturday that the new bridge number {number} will open to "
+        "traffic next month after the long repairs.</p>"
+        for number in range(9)
+    )
+    rest = "".join(
+        f"Detail {number}: engineers replaced the deck of the old bridge over the river and tested every one "
+        f"of its {number + 10} cables before the opening.<br><br>"
+        for number in range(12)
+    )
+    my_html = (
+        f"<html><body><div class='item-body'><div>{lead}</div><span class='caption'>The bridge at dawn. "
+        f"<a href='/photos'>Photo: Example Agency</a><br><br>{rest}</div></body></html>"
+    )
+    text = bare_extraction(my_html).text
+    assert "Lead 8" in text
+    assert "Detail 11" in text
