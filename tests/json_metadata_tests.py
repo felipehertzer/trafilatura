@@ -1547,3 +1547,48 @@ def test_normalize_authors_datelines(byline, expected):
 def test_normalize_authors_credit_prefixes(byline, expected):
     "Credit prefixes are removed without turning their words into extra authors."
     assert normalize_authors(None, byline) == expected
+
+
+@pytest.mark.parametrize(
+    ("title", "h1", "expected"),
+    [
+        # the meta title is the JSON-LD headline plus the branding of the site or section
+        ("Storm hits coast | Example News | Local news for the region", "", "Storm hits coast"),
+        ("Storm hits coast - Example News", "", "Storm hits coast"),
+        ("Storm hits coast — Weather", "Storm hits coast", "Storm hits coast"),
+        # after a pipe the rest is a label, whatever the page shows
+        ("Storm hits coast | Example News", "Storm hits coast | Example News", "Storm hits coast"),
+        # a colon opens a subtitle
+        ("Storm hits coast: what we know", "", "Storm hits coast: what we know"),
+        # the page shows the whole title as its headline: the JSON-LD headline is a cut one
+        (
+            "Storm hits coast — but the harbour stays open",
+            "Storm hits coast — but the harbour stays open",
+            "Storm hits coast — but the harbour stays open",
+        ),
+    ],
+)
+def test_json_headline_replaces_branded_title(title, h1, expected):
+    "the JSON-LD headline replaces a meta title that is this headline followed by branding"
+    schema = {"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Storm hits coast"}
+    page = (
+        f'<html><head><meta property="og:title" content="{title}"/>'
+        f'<script type="application/ld+json">{json.dumps(schema)}</script></head>'
+        f"<body><h1>{h1}</h1><p>The harbour stays open.</p></body></html>"
+    )
+    assert extract_metadata(page).title == expected
+
+
+@pytest.mark.parametrize("item", [None, "https://example.org/#organization"], ids=["null", "bare-id"])
+def test_json_headline_replaces_branded_title_past_malformed_graph_items(item):
+    "a graph item that is no object is passed over on the way to the article's headline"
+    schema = {
+        "@context": "https://schema.org",
+        "@graph": [item, {"@type": "NewsArticle", "headline": "Storm hits coast"}],
+    }
+    page = (
+        '<html><head><meta property="og:title" content="Storm hits coast | Example News"/>'
+        f'<script type="application/ld+json">{json.dumps(schema)}</script></head>'
+        "<body><p>The harbour stays open.</p></body></html>"
+    )
+    assert extract_metadata(page).title == "Storm hits coast"
