@@ -6,6 +6,7 @@ For reference, here is the list of all JSON-LD types: https://schema.org/docs/fu
 import json
 import logging
 import re
+from collections.abc import Collection
 from html import unescape
 from re import Pattern
 from typing import Any
@@ -218,7 +219,29 @@ def is_schema_org_context(context: Any) -> bool:
     return False
 
 
-def extract_json(schema: list[Any] | dict[str, str], metadata: Document) -> Document:
+# a colon opens a subtitle ("Coast v. Council: how do they compare?"), not the site's branding
+TITLE_SUFFIX_SEPARATORS = frozenset("|-–—·•")
+
+
+def is_branded_headline(title: str, headline: str, page_headlines: Collection[str] = ()) -> bool:
+    """True when a meta title is the article headline plus a separated suffix.
+
+    A title the page itself shows as its headline (``page_headlines``: the text of its h1 elements)
+    is no headline plus branding: the shorter JSON-LD headline is then a cut one ("Storm hits coast"
+    for "Storm hits coast — but the harbour stays open"). After a pipe the rest is a label whatever
+    the page shows ("Storm hits coast | Example News").
+    """
+    title = " ".join(unescape(title).split())
+    headline = " ".join(unescape(headline).split())
+    if not headline or title == headline or not title.startswith(headline):
+        return False
+    separator = title[len(headline) :].lstrip()[:1]
+    if separator != "|" and title.casefold() in page_headlines:
+        return False
+    return separator in TITLE_SUFFIX_SEPARATORS
+
+
+def extract_json(schema: list[Any] | dict[str, str], metadata: Document, page_headlines: Collection[str] = ()) -> Document:
     """Parse and extract metadata from JSON-LD data.
 
     Note: baseline.py's `_walk_json` also walks JSON-LD, for page content rather than
@@ -245,6 +268,21 @@ def extract_json(schema: list[Any] | dict[str, str], metadata: Document) -> Docu
                 parents.extend(as_list(parent["liveBlogUpdate"]))
             else:
                 parents.append(parent)
+
+    # the article headline replaces a meta title that is this headline followed by site or section branding
+    if metadata.title:
+        for content in parents:
+            if not isinstance(content, dict):
+                continue
+            types = {value.lower() for value in as_list(content.get("@type")) if isinstance(value, str)}
+            headline = content.get("name") if "article" in types and "name" in content else content.get("headline")
+            if (
+                types & JSON_ARTICLE_SCHEMA
+                and isinstance(headline, str)
+                and is_branded_headline(metadata.title, headline, page_headlines)
+            ):
+                metadata.title = headline
+                break
 
     return process_parent(parents, metadata)
 

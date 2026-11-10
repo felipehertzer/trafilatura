@@ -1304,3 +1304,33 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    ("title", "h1", "expected"),
+    [
+        # the meta title is the JSON-LD headline plus the branding of the site or section
+        ("Storm hits coast | Example News | Local news for the region", "", "Storm hits coast"),
+        ("Storm hits coast - Example News", "", "Storm hits coast"),
+        ("Storm hits coast — Weather", "Storm hits coast", "Storm hits coast"),
+        # after a pipe the rest is a label, whatever the page shows
+        ("Storm hits coast | Example News", "Storm hits coast | Example News", "Storm hits coast"),
+        # a colon opens a subtitle
+        ("Storm hits coast: what we know", "", "Storm hits coast: what we know"),
+        # the page shows the whole title as its headline: the JSON-LD headline is a cut one
+        (
+            "Storm hits coast — but the harbour stays open",
+            "Storm hits coast — but the harbour stays open",
+            "Storm hits coast — but the harbour stays open",
+        ),
+    ],
+)
+def test_json_headline_replaces_branded_title(title, h1, expected):
+    "the JSON-LD headline replaces a meta title that is this headline followed by branding"
+    schema = {"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Storm hits coast"}
+    page = (
+        f'<html><head><meta property="og:title" content="{title}"/>'
+        f'<script type="application/ld+json">{json.dumps(schema)}</script></head>'
+        f"<body><h1>{h1}</h1><p>The harbour stays open.</p></body></html>"
+    )
+    assert extract_metadata(page).title == expected
