@@ -367,10 +367,8 @@ def byline_discards(tree: HtmlElement) -> set[HtmlElement]:
     return {elem for expression in AUTHOR_DISCARD_XPATHS for elem in expression(tree)}
 
 
-def extract_author(tree: HtmlElement, discarded: set[HtmlElement] | None = None) -> str | None:
+def extract_author(tree: HtmlElement, discarded: set[HtmlElement]) -> str | None:
     """Extract the document author(s)"""
-    if discarded is None:
-        discarded = byline_discards(tree)
     # a copy holds its elements in the order of the original: the discarded ones leave the copy
     subtree = deepcopy(tree)
     for elem in [copy for original, copy in zip(tree.iter(), subtree.iter(), strict=True) if original in discarded]:
@@ -490,21 +488,14 @@ def extract_story_credit(tree: HtmlElement, title: str | None, discarded: set[Ht
     if not title:
         return None
     wanted = _normalize_space(title).casefold()
+    headline = next(
+        (elem for elem in tree.iter("h1", "h2") if _normalize_space(elem.text_content()).casefold() == wanted), None
+    )
     # no heading is the title: nothing to read, and no need to look for what to leave out
-    if not any(_normalize_space(elem.text_content()).casefold() == wanted for elem in tree.iter("h1", "h2")):
+    if headline is None:
         return None
     if discarded is None:
         discarded = byline_discards(tree)
-    headline = next(
-        (
-            elem
-            for elem in tree.iter("h1", "h2")
-            if _normalize_space(elem.text_content()).casefold() == wanted and elem not in discarded
-        ),
-        None,
-    )
-    if headline is None:
-        return None
     lines = _story_lines(tree, headline, discarded)
     for index, (tag, block, line, links, linked) in enumerate(lines):
         if _is_story_sentence(line):
