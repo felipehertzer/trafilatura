@@ -577,3 +577,76 @@ def test_baseline_discourse_invalid_posts_keeps_other_topics():
     doc = f'<html><body><div id="data-preloaded" data-preloaded="{preloaded}"></div></body></html>'
     _, result, _ = baseline(doc)
     assert post in result
+
+
+INTERFACE_PROSE = "The council confirmed on Saturday that the new bridge will open to traffic next month. "
+
+
+@pytest.mark.parametrize(
+    "body,kept,dropped",
+    [
+        # a toolbar is all that is left of a page whose story did not load
+        (
+            (
+                '<div class="tools"><button>Print article</button><button>Save</button>'
+                '<a href="/login">Log in or Subscribe to save article</a><a href="mailto:?subject=Story">Share</a>'
+                '<button>Copy link</button></div><div id="story"></div>'
+            ),
+            [],
+            ["Print article", "Copy link", "Share"],
+        ),
+        # site navigation and skip links
+        (
+            (
+                '<header><a class="skip-link" href="#nav">Skip to navigation</a><a class="skip-link" href="#c">'
+                'Skip to content</a><nav><a href="/">Home</a><a href="/news">News</a></nav></header><main></main>'
+            ),
+            [],
+            ["Skip to", "Home", "News"],
+        ),
+        # a share bar's label goes with its buttons
+        (
+            (
+                f"<article><p>{INTERFACE_PROSE * 3}</p><div><h3>Share this story</h3>"
+                '<a href="https://example.org/intent/compose?text=story">Example network</a>'
+                '<a href="https://example.com/sharer.php?u=story">Other network</a></div></article>'
+            ),
+            [INTERFACE_PROSE.strip()],
+            ["Share this story", "network"],
+        ),
+        # a list item's title stays over its picture
+        (
+            (
+                f"<article><p>{INTERFACE_PROSE * 2}</p><div><h2>1. The first entry of the list</h2>"
+                '<figure><img src="https://example.org/1.jpg"></figure>'
+                '<div><a href="https://example.org/intent/compose?text=entry">Example network</a></div></div></article>'
+            ),
+            [INTERFACE_PROSE.strip(), "The first entry of the list"],
+            ["Example network"],
+        ),
+        # a quiz answer is the text of its radio button
+        (
+            (
+                f"<article><p>{INTERFACE_PROSE * 2}</p><div><h3>Pick a season.</h3>"
+                '<label><input type="radio" name="q1">Autumn</label><label><input type="radio" name="q1">Winter</label>'
+                "</div></article>"
+            ),
+            [INTERFACE_PROSE.strip(), "Pick a season.", "Autumn", "Winter"],
+            [],
+        ),
+        # an unclosed control swallowing the story is not a control
+        (
+            f'<header><button class="menu">Menu<div><p>{INTERFACE_PROSE * 4}</p></div></button></header>',
+            [INTERFACE_PROSE.strip()],
+            [],
+        ),
+    ],
+    ids=["toolbar", "navigation", "share-label", "list-item", "quiz", "swallowing-control"],
+)
+def test_baseline_drops_interface_controls(body, kept, dropped):
+    "The controls and navigation of a page are not its text."
+    _, text, _ = baseline(f"<html><body>{body}</body></html>")
+    for string in kept:
+        assert string in text
+    for string in dropped:
+        assert string not in text
