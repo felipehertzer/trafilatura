@@ -5287,3 +5287,40 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+@pytest.mark.parametrize(
+    "preview",
+    [
+        (
+            '<section class="_0a7ca1bb3077d74a-wrapper"><ul class="_0a7ca1bb3077d74a-commentsPreviewList"><li>'
+            '<div class="_0a7ca1bb3077d74a-commentInfo"><span>reader2026</span><span>2 months ago</span></div>'
+            "<p>Shame nobody copies either side's policies, they would do more good.</p></li></ul></section>"
+        ),
+        (
+            '<div class="a1b2c3d4e5-commentThread"><div><span>reader2026</span>'
+            "<p>Shame nobody copies either side's policies, they would do more good.</p></div></div>"
+        ),
+    ],
+    ids=["hashed-list", "hashed-div"],
+)
+@pytest.mark.parametrize("fast", [False, True])
+def test_comment_sections_with_hashed_class_names_are_removed(preview, fast):
+    "CSS-module class names put a hash before the name: such comment sections go, other hashed names stay."
+    standfirst = "The metadata block carries the standfirst of the live coverage for readers. " * 3
+    paragraphs = "".join(
+        f"<p>Paragraph {number}: the council confirmed on Saturday that bridge number {number} "
+        "will open to traffic next month after the repairs.</p>"
+        for number in range(4)
+    )
+    my_html = (
+        '<html><body><article><section class="_93a09f9fd29a3122-articleMetadata _93a09f9fd29a3122-hasCommentsButton">'
+        f'<p>{standfirst}</p></section>{preview}{paragraphs}<div class="_0a7ca1bb3077d74a-commentary">'
+        "<p>Our political editor's commentary on the bridge deal follows the report.</p></div></article></body></html>"
+    )
+    text = bare_extraction(my_html, include_comments=False, fast=fast).text
+    assert "reader2026" not in text
+    assert "nobody copies" not in text
+    assert "bridge number 3" in text
+    assert "standfirst of the live coverage" in text
+    assert "commentary on the bridge deal" in text

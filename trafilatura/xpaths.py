@@ -152,7 +152,9 @@ COMMENTS_XPATH = [
 # or contains(@class, 'Comments')
 
 _COMMENTS_ID = "[Cc]omment(?!ary)|comol"
-_COMMENTS_CLASS = "^[Cc]omment(?!ary)|(?:article|post)-comments"
+# CSS-module names keep the class name after a hex hash ("_0a7ca1bb3077d74a-commentsPreviewList"):
+# the name is matched as if it began the class
+_COMMENTS_CLASS = "^[Cc]omment(?!ary)|(?:^|\\s)_?[0-9a-f]{8,}-[Cc]omment(?!ary)|(?:article|post)-comments"
 REMOVE_COMMENTS_XPATH = [
     XPath(
         f"""
