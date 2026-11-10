@@ -449,6 +449,26 @@ BASIC_CLEAN_XPATH = XPath(
     namespaces={"re": "http://exslt.org/regular-expressions"},
 )
 
+# baseline() only, after BASIC_CLEAN_XPATH: interface controls are never article text. The main
+# pipeline drops them in tree_cleaning (MANUALLY_CLEANED), but baseline() reads the raw tree, so a
+# page whose body is missing comes back as its toolbar ("Print article Save Share Copy link") or
+# its site navigation ("Skip to navigation Skip to content ..."). Structure only: control elements,
+# ARIA widget roles, the site banner outside the article, share links by their target, and skip
+# links by class token (CSS-module names keep the token after their hash: "_15b415a0-skipLink").
+# Kept out of BASIC_CLEAN_XPATH, which html2txt() also uses.
+BASELINE_INTERFACE_XPATH = XPath(
+    ".//button|.//dialog|.//input|.//menu|.//nav|.//select|.//textarea"
+    "|.//*[@role='alertdialog' or @role='banner' or @role='dialog' or @role='menu' or @role='menubar'"
+    " or @role='navigation' or @role='search' or @role='tab' or @role='tablist' or @role='toolbar'"
+    " or @role='tooltip']"
+    "|.//header[not(ancestor::article or ancestor::main)]"
+    "|.//a[re:test(@class, '(?:^|[\\s_-])skip-?(?:link|to)', 'i')]"
+    # share controls by link target: a mailto with no recipient, or a network's share/intent endpoint
+    "|.//a[re:test(@href, '^mailto:\\?|/(?:sharer?|shareArticle|intent/(?:tweet|post|compose)|share/url|submit|pin/create)"
+    "(?:\\.php)?\\?|whatsapp\\.com/send\\?', 'i')]",
+    namespaces={"re": "http://exslt.org/regular-expressions"},
+)
+
 TAG_CATALOG = frozenset(["code", "del", "head", "hi", "lb", "list", "p", "quote"])
 
 # min length for a repeated span to count as an extraction artifact (not coincidental content).
