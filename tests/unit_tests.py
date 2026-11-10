@@ -5287,3 +5287,58 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+CHROME_PROSE = (
+    "The council confirmed on Saturday that the new bridge will open to traffic next month. "
+    "Residents will be able to cross on foot from Monday, while cyclists must wait for the ramps. "
+)
+# a site menu in the page header, whose container class starts with "main" like a main-content frame
+CHROME_MENUS = [
+    (
+        '<header><div class="mainNavContainer"><section role="dialog"><div>Browse links</div>'
+        "<p>Residents can opt out of the sale of their personal data.</p>"
+        '<ul><li><a href="/press">Press</a></li><li><a href="/privacy">Privacy</a></li></ul>'
+        "<p>© 2026 Example Media, Inc</p></section></div></header>"
+    ),
+    (
+        '<header><div class="mainNavContainer"><div>Residents can opt out of the sale of their personal data.</div>'
+        "<div>Browse links</div><div>Press</div><div>© 2026 Example Media, Inc</div></div></header>"
+    ),
+]
+
+
+@pytest.mark.parametrize("options", [{"fast": False}, {"fast": True}, {"favor_recall": True}])
+@pytest.mark.parametrize("menu", CHROME_MENUS, ids=["dialog", "plain"])
+@pytest.mark.parametrize(
+    "story",
+    [
+        # the menu is not taken as the body frame
+        f"<main><div><p>{CHROME_PROSE * 2}</p><p>{CHROME_PROSE}</p></div></main>",
+        # nor recovered with the text around a frame that gives too little
+        f'<main><div class="post"><p>How many of these songs do you know?</p></div></main><div><p>{CHROME_PROSE * 2}</p></div>',
+    ],
+    ids=["frame", "recovery"],
+)
+def test_page_chrome_is_not_the_body(story, menu, options):
+    "The page's banner, menu or footer gives no body frame and no recovered text."
+    text = extract(f"<html><body>{menu}{story}</body></html>", **options)
+    assert "Residents will be able to cross" in text
+    assert "opt out" not in text
+    assert "Example Media" not in text
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # an unclosed header swallows the page, its h1 and the story with it
+        f'<header class="Fixed"><h1>Bridge opens</h1><div class="main-content"><p>{CHROME_PROSE * 3}</p></div>',
+        # an article's own header holding its standfirst
+        f'<article><header><h1>Bridge</h1><div class="entry-content"><p>{CHROME_PROSE * 3}</p></div></header></article>',
+    ],
+    ids=["unclosed-header", "article-header"],
+)
+def test_page_chrome_holding_the_page_is_no_chrome(body):
+    "A header holding the page's heading or its article is the page, not its chrome."
+    for fast in (False, True):
+        assert "Residents will be able to cross" in extract(f"<html><body>{body}</body></html>", fast=fast)

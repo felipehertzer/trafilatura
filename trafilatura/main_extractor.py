@@ -8,7 +8,7 @@ import re  # import regex as re
 from copy import deepcopy
 from urllib.parse import urljoin
 
-from lxml.etree import Element, SubElement, _Element, strip_elements, strip_tags, tostring
+from lxml.etree import Element, SubElement, XPath, _Element, strip_elements, strip_tags, tostring
 from lxml.html import HtmlElement
 
 # own
@@ -605,6 +605,9 @@ def recover_wild_text(
     for subelem in subelems:
         if (consumed and subelem in consumed) or any(a in handled for a in subelem.iterancestors()):
             continue
+        # the page's banner, menu or footer is no part of the article, as for the frames
+        if in_page_chrome(subelem):
+            continue
         processed = handle_textelem(subelem, potential_tags, options)
         if processed is None:
             continue
@@ -678,6 +681,30 @@ def prune_unwanted_sections(
     return tree
 
 
+# The page's banner, navigation and footer: <nav>, an ARIA banner/navigation/contentinfo/dialog,
+# or a <header>/<footer> outside sectioning content (only those are the page's, per HTML). A body
+# frame inside one is the site menu, e.g. a header's div.mainNavContainer matches the
+# "starts-with(@class, 'main')" frame. One holding an <article>, <main> or the page's <h1> (a
+# <head rend="h1"> once converted) is no chrome: on malformed markup an unclosed <header> swallows
+# the whole page.
+PAGE_CHROME_ROLES = {"banner", "navigation", "contentinfo", "dialog", "alertdialog"}
+_SECTIONING = ("article", "aside", "main", "nav", "section")
+_HOLDS_PAGE = XPath(".//article|.//main|.//h1|.//head[@rend='h1']")
+
+
+def in_page_chrome(element: _Element) -> bool:
+    "Whether an element sits inside the page's banner, navigation or footer."
+    for ancestor in element.iterancestors():
+        chrome = (
+            ancestor.tag == "nav"
+            or (ancestor.get("role") or "").lower() in PAGE_CHROME_ROLES
+            or (ancestor.tag in ("header", "footer") and next(ancestor.iterancestors(*_SECTIONING), None) is None)
+        )
+        if chrome and not _HOLDS_PAGE(ancestor):
+            return True
+    return False
+
+
 def _extract(tree: HtmlElement, options: Extractor) -> tuple[_Element, str, set[str]]:
     # init
     potential_tags = set(TAG_CATALOG)
@@ -690,8 +717,8 @@ def _extract(tree: HtmlElement, options: Extractor) -> tuple[_Element, str, set[
     result_body = Element("body")
     # iterate
     for expr in BODY_XPATH:
-        # select tree if the expression has been found
-        subtree = next((s for s in expr(tree) if s is not None), None)
+        # select tree if the expression has been found, never in the page's banner or footer
+        subtree = next((s for s in expr(tree) if s is not None and not in_page_chrome(s)), None)
         if subtree is None:
             continue
         # prune the subtree
