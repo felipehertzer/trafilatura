@@ -5304,8 +5304,15 @@ def test_invalid_charref_pattern():
             "<article rel='https://www.example.com/news/football'><h2>Football</h2>{appended}{appended}</article>"
             "<article rel='https://example.com/news/bridge?ref=home'><h1>Bridge opening</h1>{current}</article></div>"
         ),
+        # the permalink is carried by an element inside each story's wrapper
+        (
+            "<h1>Bridge opening</h1><div class='infinite-scroll'>"
+            "<div class='post'><div class='entry' data-permalink='https://www.example.com/news/bridge'>{current}</div></div>"
+            "<div class='post'><div class='entry' data-permalink='https://www.example.com/news/football'>"
+            "<h2>Football</h2>{appended}</div></div></div>"
+        ),
     ],
-    ids=["headline-outside", "appended-first"],
+    ids=["headline-outside", "appended-first", "nested-mark"],
 )
 @pytest.mark.parametrize("fast", [False, True])
 def test_infinite_scroll_keeps_the_article_marked_with_the_page_url(layout, fast):

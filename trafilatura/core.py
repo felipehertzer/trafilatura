@@ -159,7 +159,7 @@ def find_appended_containers(tree: HtmlElement) -> list[HtmlElement]:
     return [container for expression in APPENDED_ARTICLES_XPATH for container in expression(tree)]
 
 
-def prune_appended_articles(tree: HtmlElement, url: str | None, containers: list[HtmlElement] | None = None) -> HtmlElement:
+def prune_appended_articles(tree: HtmlElement, url: str | None, containers: list[HtmlElement]) -> HtmlElement:
     """Keep the current article of an infinite-scroll container, dropping the follow-ups.
 
     Some themes append later stories after the article (``mvp-post-add``); others
@@ -170,8 +170,6 @@ def prune_appended_articles(tree: HtmlElement, url: str | None, containers: list
     """
     keys = {_url_key(url)} | {_url_key(href) for href in tree.xpath('//link[@rel="canonical"]/@href')}
     keys.discard("")
-    if containers is None:
-        containers = find_appended_containers(tree)
     for container in containers:
         if container.getparent() is not None:
             current = next(
