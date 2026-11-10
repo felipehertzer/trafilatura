@@ -1300,3 +1300,12 @@ def test_the_credit_under_each_picture_is_no_copyright_notice(fast):
     text = bare_extraction(page(body=body, url=url), url=url, fast=fast).text
     assert text.count("© Photo: reader") == 6
     assert "All rights reserved" not in text
+
+
+@pytest.mark.parametrize(("min_size", "paragraphs"), [(0, 1), (250, 2)])
+def test_the_last_lines_stay_when_too_little_would_be_left(min_size, paragraphs):
+    # a story of 200 characters stands on its last lines: without them the extraction is discarded
+    story = "The fairy garden behind the glassblowing studio opened to visitors on Saturday morning. " * 2
+    tree = fromstring(f"<div><p>{story}</p><p>© 2026 Example News. All rights reserved.</p></div>")
+    prune_trailing_calls(tree, "https://news.example.com/story", min_size)
+    assert len(tree.findall(".//p")) == paragraphs

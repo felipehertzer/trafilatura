@@ -754,7 +754,7 @@ def prune_unwanted_sections(
         tree = delete_by_link_density(tree, "quote", backtracking=False, favor_precision=True)
     # after the link density tests, which need the refs, and so do the trailing calls to action
     prune_related_lists(tree)
-    prune_trailing_calls(tree, options.url)
+    prune_trailing_calls(tree, options.url, options.min_extracted_size)
     strip_tags(tree, "span", *(() if "ref" in potential_tags else ("ref",)))
     return tree
 

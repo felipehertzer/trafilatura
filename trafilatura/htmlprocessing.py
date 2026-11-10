@@ -627,7 +627,7 @@ def prune_related_lists(tree: HtmlElement) -> None:
             delete_element(label)
 
 
-def prune_trailing_calls(tree: HtmlElement, url: str | None) -> None:
+def prune_trailing_calls(tree: HtmlElement, url: str | None, min_size: int = 0) -> None:
     """Delete the calls to action and the copyright notice that end an article.
 
     Walking back from the last text block: a short block linking to a social-network profile, a
@@ -635,7 +635,9 @@ def prune_trailing_calls(tree: HtmlElement, url: str | None) -> None:
     so is a list of short links most of which are such calls; the first other block ends the
     story. Lone labels ("Share", "Advertisement", textfilter() drops them) and other blocks of a
     few words with no full stop are passed over; short linked blocks under a related-stories label
-    ("Related news") go with it. Nothing goes if the furniture would hold half the text.
+    ("Related news") go with it. Nothing goes if the furniture would hold half the text, or if less
+    than ``min_size`` characters would be left: a story that short stands on its last lines, and
+    without them the extraction is discarded for a worse one.
     """
     try:
         page_host = urlsplit(url).hostname if url else None
@@ -669,7 +671,9 @@ def prune_trailing_calls(tree: HtmlElement, url: str | None) -> None:
         elif not (RE_FILTER.match(text) or _minor_block(text)):
             break
         index -= 1
-    if furniture and 2 * sum(len(trim(elem.text_content())) for elem in furniture) < len(trim(tree.text_content())):
+    total = len(trim(tree.text_content()))
+    gone = sum(len(trim(elem.text_content())) for elem in furniture)
+    if furniture and 2 * gone < total and total - gone >= min_size:
         for elem in furniture:
             delete_element(elem)
 
