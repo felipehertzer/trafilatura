@@ -726,3 +726,21 @@ def test_block_boundaries_not_fused():
 
     inline = extract_metadata("<html><body><h1>Hyper<span>link</span>ed</h1></body></html>")
     assert inline.title == "Hyperlinked"
+
+
+@pytest.mark.parametrize(
+    ("label", "value", "expected"),
+    [
+        # a widget the page's script fills
+        ("Reading time", '<div class="reading-time" data-wpm="200"></div>', None),
+        ("Written by", "", None),
+        ("Written by", "Jane Doe", "Jane Doe"),
+    ],
+)
+def test_byline_not_read_from_meta_label(label, value, expected):
+    "A meta item's label is no name, and a block whose whole text is that label holds no author."
+    row = (
+        f'<div class="entry__meta--author entry__meta"><p class="entry__meta-title">{label}</p>'
+        f'<div class="entry__author">{value}</div></div>'
+    )
+    assert extract_metadata(f"<html><body><h1>Title</h1>{row}<p>Some text.</p></body></html>").author == expected

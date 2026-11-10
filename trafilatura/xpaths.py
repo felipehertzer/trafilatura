@@ -384,6 +384,13 @@ COMMENTS_DISCARD_XPATH = [
 ### 2. METADATA
 
 
+# A meta item's label is no name, and an element whose whole text is that label holds no value:
+# a block named "...__meta--author" holding the label p.entry__meta-title "Reading time"
+# over a widget the page's script fills
+_NOT_META_LABEL_ONLY = """
+        [not(normalize-space(.) = normalize-space(.//*[re:test(@class, 'meta[-_]+(?:title|label)(?:\\s|$)')]))]
+"""
+
 # the order or depth of XPaths could be changed after exhaustive testing
 AUTHOR_XPATHS = [
     XPath(
@@ -404,7 +411,8 @@ AUTHOR_XPATHS = [
         contains(@itemprop, 'author') or
         (@id and re:test(@id, 'author|zuozhe|bianji|xiaobian')) or
         (@class and re:test(@class, 'author|channel-name|zuozhe|bianji|xiaobian|submitted-by|posted-by|journalist-name'))]
-        """,
+        """
+        + _NOT_META_LABEL_ONLY,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
@@ -414,7 +422,8 @@ AUTHOR_XPATHS = [
         contains(@data-component, 'Byline') or contains(@itemprop, 'author') or
         (@id and re:test(@id, '[Aa]uthor')) or
         (@class and re:test(@class, '[Aa]uthor|screenname|writer|[Bb]yline'))]
-        """,
+        """
+        + _NOT_META_LABEL_ONLY,
         namespaces={"re": REGEXP_NS},
     ),
 ]
