@@ -1334,3 +1334,18 @@ def test_json_headline_replaces_branded_title(title, h1, expected):
         f"<body><h1>{h1}</h1><p>The harbour stays open.</p></body></html>"
     )
     assert extract_metadata(page).title == expected
+
+
+@pytest.mark.parametrize("item", [None, "https://example.org/#organization"], ids=["null", "bare-id"])
+def test_json_headline_replaces_branded_title_past_malformed_graph_items(item):
+    "a graph item that is no object is passed over on the way to the article's headline"
+    schema = {
+        "@context": "https://schema.org",
+        "@graph": [item, {"@type": "NewsArticle", "headline": "Storm hits coast"}],
+    }
+    page = (
+        '<html><head><meta property="og:title" content="Storm hits coast | Example News"/>'
+        f'<script type="application/ld+json">{json.dumps(schema)}</script></head>'
+        "<body><p>The harbour stays open.</p></body></html>"
+    )
+    assert extract_metadata(page).title == "Storm hits coast"
