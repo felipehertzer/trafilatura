@@ -1289,3 +1289,14 @@ def test_and_inside_a_job_title_credits_no_one_else(byline, author):
 )
 def test_with_joins_two_people_only_before_a_person(byline, author):
     assert normalize_authors(None, byline) == author
+
+
+@pytest.mark.parametrize("fast", [True, False])
+def test_the_credit_under_each_picture_is_no_copyright_notice(fast):
+    # a gallery: a number, the picture's text and its credit, again and again; a notice names a year
+    gallery = "".join(f"<h3>#{n}</h3><p>{PARAGRAPH}Picture {n} shows it.</p><p>© Photo: reader{n}</p>" for n in range(1, 7))
+    url = "https://www.example.com/gallery"
+    body = f"<article><h1>The best bridge pictures</h1>{gallery}<p>© 2026 Example News. All rights reserved.</p></article>"
+    text = bare_extraction(page(body=body, url=url), url=url, fast=fast).text
+    assert text.count("© Photo: reader") == 6
+    assert "All rights reserved" not in text

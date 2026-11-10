@@ -510,8 +510,9 @@ _NOT_ALNUM = re.compile(r"[^a-z0-9]+")
 SITE_NAME_MIN_CHARS = 4
 _NEWSLETTER_LINK = re.compile(r"news-?letter", re.IGNORECASE)
 _SUBSCRIBE_LINK = re.compile(r"subscri|sign-?up|mailing-?list", re.IGNORECASE)
-# a copyright notice: "© 2026 Example", "Copyright Example 2026", "... All rights reserved."
-_NOTICE = re.compile(r"^\W*(?:©|copyright\b)|\ball rights reserved\b", re.IGNORECASE)
+# a copyright notice: "© 2026 Example", "Copyright Example 2026", "... All rights reserved." Without a
+# year it is a credit ("© Photo: milkyprint" under each picture of a gallery), which is the article's
+_NOTICE = re.compile(r"^\W*(?:©|copyright\b)(?=.*\b(?:19|20)\d{2}\b)|\ball rights reserved\b", re.IGNORECASE)
 TRAILING_CALL_MAX_CHARS = 300
 _TRAILING_BLOCKS = ("p", "head", "item", "quote", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote")
 
