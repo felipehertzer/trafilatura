@@ -957,3 +957,21 @@ def test_author_markers(decoy, marker):
 def test_author_discard_markers(marker):
     "Authors inside discarded sections are ignored."
     assert extract_metadata(wrap(marker, '<span class="author">Jenny Smith</span>')).author is None
+
+
+@pytest.mark.parametrize(
+    ("label", "value", "expected"),
+    [
+        # a widget the page's script fills
+        ("Reading time", '<div class="reading-time" data-wpm="200"></div>', None),
+        ("Written by", "", None),
+        ("Written by", "Jane Doe", "Jane Doe"),
+    ],
+)
+def test_byline_not_read_from_meta_label(label, value, expected):
+    "A meta item's label is no name, and a block whose whole text is that label holds no author."
+    row = (
+        f'<div class="entry__meta--author entry__meta"><p class="entry__meta-title">{label}</p>'
+        f'<div class="entry__author">{value}</div></div>'
+    )
+    assert extract_metadata(f"<html><body><h1>Title</h1>{row}<p>Some text.</p></body></html>").author == expected
