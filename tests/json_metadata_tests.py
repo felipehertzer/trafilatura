@@ -1304,3 +1304,21 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    "author_string, expected",
+    [
+        ("example.com", None),
+        ("example.co.uk", None),
+        ("Example.so", None),
+        ("Jane Doe; news.example.com.au", "Jane Doe"),
+        # initials and titles joined by a dot stay names
+        ("J.R. Roe", "J R Roe"),
+        ("Dr.Roe", "Dr Roe"),
+        ("j.roe", "J Roe"),
+    ],
+)
+def test_normalize_authors_website_bylines(author_string, expected):
+    "a website named as the author is no person"
+    assert normalize_authors(None, author_string) == expected
