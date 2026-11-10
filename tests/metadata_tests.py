@@ -726,3 +726,19 @@ def test_block_boundaries_not_fused():
 
     inline = extract_metadata("<html><body><h1>Hyper<span>link</span>ed</h1></body></html>")
     assert inline.title == "Hyperlinked"
+
+
+@pytest.mark.parametrize(
+    "badge",
+    [
+        '<span class="article-meta-status"><a href="#review">Reviewed</a></span>',
+        '<span class="post-meta-status">Fact checked</span>',
+    ],
+)
+def test_byline_status_badge(badge):
+    "A review or fact-check status badge in the byline row is no author."
+    byline = (
+        '<div class="article-meta-byline"><span class="article-meta-source"><a href="/source">Example State University'
+        f'</a></span><span class="article-meta-date">Sep 26 2026</span>{badge}</div>'
+    )
+    assert extract_metadata(f"<html><body>{byline}</body></html>").author == "Example State University"
