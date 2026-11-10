@@ -5287,3 +5287,65 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+def chrome_column(story_wrapper):
+    "A page column read as the frame: the story's wrapper is named by a discard token, chrome sits beside it."
+    story = "".join(
+        f"<p>{sentence} The company said drilling continues through the quarter at its flagship project.</p>"
+        for sentence in (
+            "Example Energy today announced an operational and financial update for the quarter.",
+            "The North-1 well is producing at an average rate of 1,188 barrels of oil per day.",
+            "The Rose-1 well is producing at an average rate of 305 barrels of oil per day.",
+            "The company bought back 15 million shares of common stock for 20 million dollars.",
+            "Exploration in the eastern basin produced oil from four independent prospects.",
+        )
+    )
+    return (
+        '<html><body><div class="main">'
+        '<div class="topbar"><ul><li><span>WORLD EDITION</span></li><li>Australia</li><li>North America</li></ul></div>'
+        f'<div class="{story_wrapper}"><div class="widget__body"><p>The transaction would have created the '
+        "second-largest gold miner in the world.</p></div>"
+        f'<div class="widget__body"><div class="body"><div class="body-description">{story}</div></div></div></div>'
+        '<div class="author__modal-wrapper"><p>Jane Doe is a graduate of Example University with a degree '
+        "in Interdisciplinary Studies.</p><p>Learn about our editorial policies.</p></div>"
+        '<div class="column__right"><div class="press-releases-sidebar"><h3>Latest News</h3>'
+        "<p>Another company announces another drilling result this week.</p></div></div>"
+        '<div class="alert-wrapper"><div role="dialog" class="alert-popup"><h3>Alert Options</h3>'
+        "<p>No alert set</p></div></div></div></body></html>"
+    )
+
+
+CHROME_BESIDE = ["WORLD EDITION", "Example University", "editorial policies", "Latest News", "Alert Options"]
+
+
+@pytest.mark.parametrize("fast", [False, True])
+@pytest.mark.parametrize(
+    "page,kept,dropped",
+    [
+        # the story's wrapper is named by a discard token ("widget")
+        (chrome_column("widget post-partial"), ["North-1 well", "second-largest gold miner"], CHROME_BESIDE),
+        # or named like chrome ("social")
+        (chrome_column("post--social"), ["North-1 well", "second-largest gold miner"], CHROME_BESIDE),
+        # content blocks all named by a token that also names content stay
+        (
+            '<html><body><div class="main">'
+            + "".join(
+                f'<div class="text-widget"><p>The council confirmed on Saturday that the new bridge will open. Part {n} '
+                "of the history of the network and its founders, written by the editors.</p></div>"
+                for n in range(1, 5)
+            )
+            + "</div></body></html>",
+            [f"Part {n} of the history" for n in range(1, 5)],
+            [],
+        ),
+    ],
+    ids=["widget-wrapper", "social-wrapper", "widget-blocks"],
+)
+def test_chrome_beside_a_story_wrapper_named_by_a_discard_token(page, kept, dropped, fast):
+    "When the over-pruning guard keeps a frame, the clear page chrome beside its text still goes."
+    text = extract(page, fast=fast)
+    for string in kept:
+        assert string in text
+    for string in dropped:
+        assert string not in text

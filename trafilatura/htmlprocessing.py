@@ -19,6 +19,7 @@ from .settings import (
 )
 from .utils import LINK_FARM_RATIO, image_src, safe_base_url, safe_relative_url, textfilter, trim
 from .xml import delete_element, meta_items, remove_empty_elements, separates_inline
+from .xpaths import CHROME_CLASS, CHROME_ID
 
 LOGGER = logging.getLogger(__name__)
 
@@ -158,8 +159,14 @@ def prune_html(tree: HtmlElement, focus: str = "balanced") -> HtmlElement:
     return tree
 
 
-def prune_unwanted_nodes(tree: HtmlElement, nodelist: list[XPath], with_backup: bool = False) -> HtmlElement:
-    "Prune the HTML tree by removing unwanted sections."
+def prune_unwanted_nodes(
+    tree: HtmlElement, nodelist: list[XPath], with_backup: bool = False, beside_content: bool = False
+) -> HtmlElement:
+    """Prune the HTML tree by removing unwanted sections.
+
+    With a backup, nothing is pruned when that would remove almost all the text. With
+    ``beside_content``, the clear page chrome beside the frame's main text is still removed then.
+    """
     if not with_backup:
         for expression in nodelist:
             for subtree in expression(tree):
@@ -173,7 +180,64 @@ def prune_unwanted_nodes(tree: HtmlElement, nodelist: list[XPath], with_backup: 
     if old_len - sum(len(elem.text_content()) for elem in outer) > old_len / 7:
         for elem in outer:
             delete_element(elem)
+    elif beside_content:
+        prune_beside_content(tree, list(matches), old_len)
     return tree
+
+
+# the main text block must hold a story's worth of paragraphs: a frame left with a few lines once a
+# narrower one took the article is left as it was
+MAIN_BLOCK_MIN_TEXT = 500
+
+
+def _main_text_block(tree: HtmlElement) -> HtmlElement | None:
+    "The element whose own paragraphs hold the most text: the frame's article body."
+    weight: dict[HtmlElement, int] = {}
+    for para in tree.iter("p"):
+        parent = para.getparent()
+        if parent is not None:
+            weight[parent] = weight.get(parent, 0) + len(trim(para.text_content()))
+    if not weight:
+        return None
+    main = max(weight, key=weight.__getitem__)
+    return main if weight[main] >= MAIN_BLOCK_MIN_TEXT else None
+
+
+def _class_name(elem: HtmlElement) -> str:
+    return " ".join((elem.get("class") or "").split())
+
+
+def prune_beside_content(tree: HtmlElement, matches: list[HtmlElement], old_len: int) -> None:
+    """When pruning every match would gut the frame, one of them wraps its text (the story sits in
+    div.widget > div.widget__body, and "widget" is a discard token). Instead of keeping everything,
+    keep the matched wrappers of the main text block and the blocks of the same component (same
+    class: the standfirst's own div.widget__body), keep the matches named only by tokens that also
+    name content (widget, meta, slide ...), and remove the clear page chrome left beside the text:
+    its edition bar, sidebar, author box, sign-up box, and any dialog. The guard still applies to
+    the result."""
+    main = _main_text_block(tree)
+    if main is None:
+        return
+    wrappers = {main, *main.iterancestors()}
+    protected = {elem for elem in matches if elem in wrappers}
+    names = {_class_name(elem) for elem in protected if elem.get("class")}
+    doomed = {
+        elem
+        for elem in matches
+        if elem not in protected
+        and _class_name(elem) not in names
+        and (CHROME_CLASS.search(elem.get("class") or "") or CHROME_ID.search(elem.get("id") or ""))
+    }
+    # an overlay beside the text (a hidden "Alert Options" dialog) is interface, whatever its class
+    doomed.update(
+        elem
+        for elem in tree.iter("*")
+        if (elem.get("role") or "").lower() in ("dialog", "alertdialog") and elem not in wrappers
+    )
+    outer = [elem for elem in doomed if not any(a in doomed for a in elem.iterancestors())]
+    if outer and old_len - sum(len(elem.text_content()) for elem in outer) > old_len / 7:
+        for elem in outer:
+            delete_element(elem)
 
 
 def collect_link_info(
