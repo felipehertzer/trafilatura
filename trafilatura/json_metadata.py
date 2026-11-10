@@ -100,6 +100,44 @@ AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+AUTHOR_ROLE_WORDS = frozenset(
+    {
+        "editor", "correspondent", "reporter", "writer", "journalist", "producer", "columnist", "presenter",
+        "host", "contributor", "critic", "photographer", "spokesperson", "spokesman", "spokeswoman",
+        "commentator", "analyst", "anchor", "director", "manager", "professor", "fellow", "lecturer",
+        "researcher", "historian", "founder", "officer", "economist", "scientist", "president", "chair",
+        "adviser", "advisor", "consultant", "coordinator", "teacher", "ceo", "cmo", "cto", "cfo", "coo",
+    }
+)  # fmt: skip
+# After a comma, a role describes the person before it: "Jane Doe, Open
+# Justice multimedia journalist", "Jane Doe, Census spokesperson". One
+# person holds one role, so a plural is a surname ("Jane Doe, John Fellows").
+AUTHOR_DESCRIPTION = re.compile(rf"\b(?:{'|'.join(sorted(AUTHOR_ROLE_WORDS))})\b", flags=re.IGNORECASE)
+# Post-nominal letters after a comma: "Jane Doe, RDN, LD", "Jane Doe, CFP®, EA".
+AUTHOR_CREDENTIALS = frozenset(
+    {
+        "rdn", "rd", "ld", "ea", "cfp", "cpa", "cfa", "phd", "md", "rn", "oam", "am", "ao", "ac", "mba", "msc",
+        "bsc", "jd", "esq", "mph", "dvm", "gaicd", "faicd", "fca",
+    }
+)  # fmt: skip
+AUTHOR_CREDENTIAL_LIKE = re.compile(r"[A-Za-z]{2,5}\.?[®™]?")
+# A second person after a role: "Chief political correspondent and John Roe".
+AUTHOR_JOINED_NAME = re.compile(r"\s+(?:and|with)\s+(?=[A-ZÀ-Þ][^\W\d_]*\s+[A-ZÀ-Þ])")
+# A person's name ahead: two capitalised words ("John Roe", "Marie-Anne LE ROUX", "Dana O'Neil").
+AUTHOR_PERSON_AHEAD = re.compile(r"\s*([A-ZÀ-Þ](?:[^\W\d_]|['’-])*)\s+([A-ZÀ-Þ](?:[^\W\d_]|['’-])*)")
+# A programme part after a comma: "Jane Doe, Episode 3".
+AUTHOR_EPISODE = re.compile(r"(?:episode|ep|part|series|season|chapter|vol(?:ume)?)\.?\s*\d+", flags=re.IGNORECASE)
+# A website after a comma: "Jane Doe, Example.com".
+AUTHOR_DOMAIN = re.compile(r"[\w-]+(?:\.[\w-]+)*\.(?:com|org|net|edu|gov|io|co|au|nz|uk)\b", flags=re.IGNORECASE)
+AUTHOR_WORD = re.compile(r"[^\W\d_]+")
+# words of an organisation's name, never of a person's
+AUTHOR_NOT_NAME_WORDS = frozenset(
+    {
+        "news", "desk", "team", "staff", "group", "media", "network", "solutions", "services", "systems",
+        "labs", "university", "college", "school", "institute", "international", "online", "magazine", "radio",
+        "sports", "football", "motoring",
+    }
+)  # fmt: skip
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -332,6 +370,62 @@ def normalize_json_values(value: Any) -> Any:
     return value
 
 
+def _is_person_detail(segment: str) -> bool:
+    """Whether a comma segment after a name describes that person rather than naming another."""
+    text = segment.strip()
+    if text.strip(".®™ ").casefold() in AUTHOR_CREDENTIALS:
+        return True
+    if AUTHOR_EPISODE.fullmatch(text) or AUTHOR_DOMAIN.fullmatch(text):
+        return True
+    return any(word.casefold() in AUTHOR_NOT_NAME_WORDS for word in AUTHOR_WORD.findall(text))
+
+
+def _is_person_ahead(text: str) -> bool:
+    """Whether a text opens with a person's name: two capitalised words, none of them a role or a
+    word of an organisation ("John Roe", but not "Beauty Editor" or "Example Sports")."""
+    match = AUTHOR_PERSON_AHEAD.match(text)
+    if match is None:
+        return False
+    words = {word.casefold() for name in match.groups() for word in AUTHOR_WORD.findall(name)}
+    return not words & (AUTHOR_NOT_NAME_WORDS | AUTHOR_ROLE_WORDS)
+
+
+def _drop_person_details(author_string: str) -> str:
+    """Drop what follows a name after a comma when it describes the person.
+
+    "Jane Doe, Fashion historian, Example University" is one person: a role
+    ends the name, and the rest of that credit is the role's organisation
+    ("Jane Doe, Managing Director, North America, EXG"). Credentials ("RDN"),
+    an organisation ("Example University"), a website ("Example.com") or an
+    episode ("Episode 3") go on their own. A list of names stays a list, and a
+    name joined with "and" starts a new credit.
+    """
+    groups = re.split(r"([;|/&])", author_string)
+    for index in range(0, len(groups), 2):
+        segments = groups[index].split(",")
+        kept, in_role = segments[:1], False
+        for segment in segments[1:]:
+            if re.match(r"\s*(?:and|with)\s", segment, flags=re.IGNORECASE):
+                in_role = False
+            elif in_role:
+                continue
+            elif AUTHOR_DESCRIPTION.search(segment):
+                in_role = True
+                # "Jane Doe, Chief political correspondent and John Roe" credits John Roe too,
+                # "Jane Doe, Weekend and Beauty Editor" credits no one else: the title goes on
+                joined = AUTHOR_JOINED_NAME.split(segment, maxsplit=1)
+                if len(joined) == 1 or not _is_person_ahead(joined[1]):
+                    continue
+                segment, in_role = " and " + joined[1], False
+            elif _is_person_detail(segment):
+                # an organisation ends the credit too: "Example School of Economics, Moscow"
+                in_role = not AUTHOR_CREDENTIAL_LIKE.fullmatch(segment.strip())
+                continue
+            kept.append(segment)
+        groups[index] = ",".join(kept)
+    return "".join(groups)
+
+
 def normalize_authors(current_authors: str | None, author_string: str) -> str | None:
     """Normalize author info to focus on author names only"""
     new_authors = []
@@ -350,6 +444,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author_string = unescape(author_string)
     # remove html tags
     author_string = HTML_STRIP_TAGS.sub("", author_string)
+    author_string = _drop_person_details(author_string)
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
         author = trim(author)

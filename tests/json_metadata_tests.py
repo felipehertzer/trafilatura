@@ -1304,3 +1304,32 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    ("byline", "expected"),
+    [
+        # a role ends the credit, with the role's organisation after it
+        ("Jane Doe, Open Justice multimedia journalist", "Jane Doe"),
+        ("Jane Doe, Fashion historian, Example University", "Jane Doe"),
+        ("Jane Doe, Managing Director, North America, EXG", "Jane Doe"),
+        ("Jane Doe, Co-founder and CEO, Example TV", "Jane Doe"),
+        ("Jane Doe, Weekend and Beauty Editor", "Jane Doe"),
+        ("JANE DOE, year three teacher, Example Primary School", "JANE DOE"),
+        # credentials, an organisation, a website and a programme part on their own
+        ("Jane Doe, RDN, LD", "Jane Doe"),
+        ("Jane Doe, CFP®, EA", "Jane Doe"),
+        ("Jane Doe, Example University", "Jane Doe"),
+        ("By JANE DOE, EXAMPLE MOTORING", "JANE DOE"),
+        ("Jane Doe, Example.com", "Jane Doe"),
+        ("Jane Doe, Episode 3", "Jane Doe"),
+        # a person joined after the role is a second credit
+        ("Jane Doe, Chief political correspondent and John Roe", "Jane Doe; John Roe"),
+        ("Jane Doe, Editor, and John Roe", "Jane Doe; John Roe"),
+        # a list of names stays a list
+        ("Jane Doe, John Fellows, Mary Major", "Jane Doe; John Fellows; Mary Major"),
+    ],
+)
+def test_normalize_authors_person_details(byline, expected):
+    "What follows a name after a comma can describe the person rather than name another."
+    assert normalize_authors(None, byline) == expected
