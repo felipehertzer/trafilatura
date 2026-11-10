@@ -5349,3 +5349,23 @@ def test_readability_holding_headings_and_lists_between_the_own_paragraphs_wins(
     text = bare_extraction(my_html).text
     assert "Route: to Lakeside" in text
     assert "summit trail number 2" in text
+
+
+def test_readability_without_the_own_paragraphs_still_wins_on_length():
+    "Readability's much longer text is not chrome around the own extraction when it does not hold it."
+    lead = "".join(
+        f"<p>Lead {number}: the council confirmed on Saturday that the new bridge number {number} will open to "
+        "traffic next month after the long repairs.</p>"
+        for number in range(8)
+    )
+    details = "".join(
+        f"<p>Detail {number}: engineers replaced the deck of the old bridge over the river and tested every one "
+        f"of its {number + 10} cables before the opening.</p>"
+        for number in range(20)
+    )
+    my_html = (
+        f"<html><body><div class='main'><article><h1>Bridge opens</h1>{lead}</article></div>"
+        f"<div class='other'><div class='story-continued'>{details}</div></div></body></html>"
+    )
+    text = bare_extraction(my_html).text
+    assert "Detail 19" in text
