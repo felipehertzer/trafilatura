@@ -459,8 +459,42 @@ def _author_discard(tree: HtmlElement) -> list[HtmlElement]:
     ]
 
 
+AUTHOR_TIMESTAMP_ATTRS = ("datetime", "data-timestamp", "data-date", "data-datetime")
+AUTHOR_TIMESTAMP_CLASS = re.compile(r"(?:^|[\s_-])(?:date|timestamp|pubdate)(?:[A-Z\s_-]|$)")
+AUTHOR_OR_BYLINE_CLASS = re.compile("[Aa]uthor|[Bb]yline")
+
+
+def _is_timestamp(elem: HtmlElement) -> bool:
+    "A date or time element, by its attributes, class or tag name."
+    return (
+        any(attr in elem.attrib for attr in AUTHOR_TIMESTAMP_ATTRS)
+        or elem.get("itemprop", "").startswith("date")
+        or bool(AUTHOR_TIMESTAMP_CLASS.search(elem.get("class", "")))
+        or "timestamp" in str(elem.tag)
+    )
+
+
+def _author_timestamps(tree: HtmlElement) -> list[HtmlElement]:
+    'A timestamp is no name, unless the element is or holds the author ("date-author").'
+    return [
+        elem
+        for elem in tree.iter(Element)
+        if _is_timestamp(elem)
+        and not any(
+            AUTHOR_OR_BYLINE_CLASS.search(inner.get("class", ""))
+            or inner.get("rel") == "author"
+            or inner.get("itemprop") == "author"
+            for inner in elem.iter(Element)
+        )
+    ]
+
+
 AUTHOR_XPATHS: list[Callable[[HtmlElement], list[HtmlElement]]] = [_author_specific, _author_generic, _author_any]
-AUTHOR_DISCARD_XPATHS: list[Callable[[HtmlElement], Any]] = [_author_discard, XPath("//time|//figure")]
+AUTHOR_DISCARD_XPATHS: list[Callable[[HtmlElement], Any]] = [
+    _author_discard,
+    _author_timestamps,
+    XPath("//time|//figure"),
+]
 
 
 # links under a block: /descendant::a walks each block once, whereas //a expands to
