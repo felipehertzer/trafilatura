@@ -158,8 +158,17 @@ def prune_html(tree: HtmlElement, focus: str = "balanced") -> HtmlElement:
     return tree
 
 
-def prune_unwanted_nodes(tree: HtmlElement, nodelist: list[XPath], with_backup: bool = False) -> HtmlElement:
-    "Prune the HTML tree by removing unwanted sections."
+def prune_unwanted_nodes(
+    tree: HtmlElement, nodelist: list[XPath], with_backup: bool = False, extracted_len: int = 0
+) -> HtmlElement:
+    """Prune the HTML tree by removing unwanted sections.
+
+    With a backup, nothing is pruned when that would remove almost all the text. Text
+    already extracted from the page (``extracted_len`` characters, taken by an earlier,
+    narrower frame that holds no short extraction) counts as kept: that frame took the
+    article out of this one, and what is left here is mostly page furniture the guard would
+    otherwise keep whole.
+    """
     if not with_backup:
         for expression in nodelist:
             for subtree in expression(tree):
@@ -168,7 +177,7 @@ def prune_unwanted_nodes(tree: HtmlElement, nodelist: list[XPath], with_backup: 
     # guard: prune nothing if it would remove too much text, the tree keeps its elements
     matches = dict.fromkeys(elem for expression in nodelist for elem in expression(tree))
     outer = [elem for elem in matches if not any(a in matches for a in elem.iterancestors())]
-    old_len = len(tree.text_content())
+    old_len = len(tree.text_content()) + extracted_len
     # todo: adjust for recall and precision settings
     if old_len - sum(len(elem.text_content()) for elem in outer) > old_len / 7:
         for elem in outer:

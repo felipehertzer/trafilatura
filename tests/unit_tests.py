@@ -5287,3 +5287,32 @@ def test_invalid_charref_pattern():
         INVALID_XML_CHARREFS.sub("", "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;&#1x")
         == "&#9;&#10;&#13;&#32;&#039;&#x1F600;&#123;&#x10000;&#xFFFF0;x"
     )
+
+
+@pytest.mark.parametrize("fast", [False, True])
+def test_furniture_beside_a_story_taken_by_a_narrower_frame(fast):
+    "Once a narrower frame took the whole story, what a wider frame holds beside it is furniture."
+    # the story is one plain text run, which does not end the frame search, so the wider article
+    # is read too: all that is left there is a subscription offer and related stories
+    story = "Same-store sales fell three per cent, yet operating profit rose thirteen per cent to a record. "
+    offer = (
+        '<div id="premium-box"><div class="premium-box"><h3>This content is for subscribers only.</h3>'
+        "<p>Subscribe now to unlock an all-access pass.</p><h4>Monthly</h4><ul><li>Unlimited news access</li>"
+        "<li>Daily content straight to your inbox</li><li>Exclusive members only masterclasses</li>"
+        '<li>Weekly careers advice</li></ul><a href="https://example.org/subscription">Subscribe now</a></div></div>'
+    )
+    related = "".join(
+        f'<div class="post__item category-top-stories"><a href="https://example.org/s{n}">Story {n}</a>'
+        "<div>Retailers report a mixed start to the season across the region.</div></div>"
+        for n in range(5)
+    )
+    page = (
+        '<html><body><article><div class="meta">By Jane Doe | 5 November 2026</div><div class="row">'
+        f'<div class="article__body"><div>{(story * 3 + chr(10) * 3) * 12}</div></div>{offer}{related}'
+        "</div></article></body></html>"
+    )
+    text = extract(page, fast=fast)
+    assert text.count("operating profit rose thirteen per cent") == 36
+    assert "subscribers only" not in text
+    assert "Subscribe now" not in text
+    assert "mixed start to the season" not in text
