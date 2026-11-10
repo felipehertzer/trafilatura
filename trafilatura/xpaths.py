@@ -384,6 +384,15 @@ COMMENTS_DISCARD_XPATH = [
 ### 2. METADATA
 
 
+# An author box's prose about the writer is no byline, nor is an element holding it:
+# the name has an element of its own (div.author-about beside h4.author-name).
+# A prose element holding the name heading is the box itself.
+_NOT_AUTHOR_BIO = """
+        [not(descendant-or-self::*[re:test(@class, '(?:^|\\s)author-(?:about|bio|description)(?:\\s|$)') and
+        not(descendant::*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6 or
+        re:test(@class, '[Aa]uthor-?(?:[Nn]ame|[Tt]itle)')])])]
+"""
+
 # the order or depth of XPaths could be changed after exhaustive testing
 AUTHOR_XPATHS = [
     XPath(
@@ -404,7 +413,8 @@ AUTHOR_XPATHS = [
         contains(@itemprop, 'author') or
         (@id and re:test(@id, 'author|zuozhe|bianji|xiaobian')) or
         (@class and re:test(@class, 'author|channel-name|zuozhe|bianji|xiaobian|submitted-by|posted-by|journalist-name'))]
-        """,
+        """
+        + _NOT_AUTHOR_BIO,
         namespaces={"re": REGEXP_NS},
     ),
     XPath(
@@ -414,7 +424,8 @@ AUTHOR_XPATHS = [
         contains(@data-component, 'Byline') or contains(@itemprop, 'author') or
         (@id and re:test(@id, '[Aa]uthor')) or
         (@class and re:test(@class, '[Aa]uthor|screenname|writer|[Bb]yline'))]
-        """,
+        """
+        + _NOT_AUTHOR_BIO,
         namespaces={"re": REGEXP_NS},
     ),
 ]
