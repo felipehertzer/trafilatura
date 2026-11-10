@@ -957,3 +957,40 @@ def test_author_markers(decoy, marker):
 def test_author_discard_markers(marker):
     "Authors inside discarded sections are ignored."
     assert extract_metadata(wrap(marker, '<span class="author">Jenny Smith</span>')).author is None
+
+
+@pytest.mark.parametrize(
+    ("title", "sitename", "headline", "expected"),
+    [
+        # a first segment naming the site, then the page's own headline
+        (
+            "Example News - Bridge opens next month",
+            "Example News",
+            "<h1>Bridge opens next month</h1>",
+            "Bridge opens next month",
+        ),
+        (
+            "The Example Times | Bridge opens next month",
+            "Example Times",
+            '<div><meta itemprop="headline" content="Bridge opens next month"/></div>',
+            "Bridge opens next month",
+        ),
+        # the site named by the host
+        ("examplenews · Bridge opens next month", None, "<h1>Bridge opens next month</h1>", "Bridge opens next month"),
+        # without the headline on the page the rest may be a tagline: it stays
+        (
+            "Example News | Local news for the region",
+            "Example News",
+            "<h1>Bridge opens next month</h1>",
+            "Example News | Local news for the region",
+        ),
+    ],
+)
+def test_title_site_prefix(title, sitename, headline, expected):
+    "a leading site name is removed when the rest of the title is the page's headline"
+    head = f'<meta property="og:title" content="{title}"/>'
+    if sitename:
+        head += f'<meta property="og:site_name" content="{sitename}"/>'
+    page = f"<html><head>{head}</head><body>{headline}</body></html>"
+    metadata = extract_metadata(page, default_url="https://www.examplenews.org/bridge")
+    assert metadata.title == expected

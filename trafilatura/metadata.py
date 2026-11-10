@@ -249,19 +249,39 @@ def names_site(name: str, segment: str, max_extra: int) -> bool:
     )
 
 
-def strip_site_suffix(title: str, sitename: str | None, hostname: str | None) -> str:
-    "Remove the last title segment if it names the site, e.g. 'Article | Site'."
-    parts = split_title(title)
-    if not parts:
-        return title
-    last = NON_WORD.sub("", parts[1].lower())
+def segment_names_site(segment: str, sitename: str | None, hostname: str | None) -> bool:
+    "Tell if a title segment names the site, by its site name or its host."
+    segment = NON_WORD.sub("", segment.lower())
     host = (hostname or "").lower().removeprefix("www.")
     # first host label (unless generic) and registered domain, e.g. 'edition' and 'cnn' for edition.cnn.com
     first = host.split(".")[0]
     labels = ("" if first in GENERIC_HOST_LABELS else first, (extract_domain("http://" + host) or "").split(".")[0])
     # the site name allows a short extra word ('Site Blog'), host labels match at any length
-    if names_site(sitename or "", last, 4) or any(names_site(label, last, len(last)) for label in labels):
+    return names_site(sitename or "", segment, 4) or any(names_site(label, segment, len(segment)) for label in labels)
+
+
+def strip_site_suffix(title: str, sitename: str | None, hostname: str | None) -> str:
+    "Remove the last title segment if it names the site, e.g. 'Article | Site'."
+    parts = split_title(title)
+    if parts and segment_names_site(parts[1], sitename, hostname):
         return parts[0]
+    return title
+
+
+def strip_site_prefix(title: str, sitename: str | None, hostname: str | None, tree: HtmlElement) -> str:
+    """Remove the first title segment if it names the site and the rest is the page's headline.
+
+    "Example News - Bridge opens" with <h1>Bridge opens</h1> -> "Bridge opens". Without the
+    headline on the page the rest may be a tagline ("Example News | Local news"), so it stays.
+    """
+    separator = TITLE_SPLIT.search(title)
+    if separator is None or not segment_names_site(title[: separator.start()], sitename, hostname):
+        return title
+    rest = " ".join(title[separator.end() :].split())
+    headlines = [block_text(h1) for h1 in tree.xpath(".//h1")]
+    headlines += tree.xpath('.//*[@itemprop="headline"]/@content')
+    if len(rest) >= 10 and any(" ".join(headline.split()) == rest for headline in headlines):
+        return rest
     return title
 
 
@@ -583,6 +603,7 @@ def extract_metadata(
 
     if metadata.title:
         metadata.title = strip_site_suffix(metadata.title, metadata.sitename, metadata.hostname)
+        metadata.title = strip_site_prefix(metadata.title, metadata.sitename, metadata.hostname, tree)
     # a dot in the first segment means a host or junk, e.g. 'cdn.org/i.jpg'
     image = metadata.image
     if image and metadata.url and not image.startswith(("http://", "https://")):
