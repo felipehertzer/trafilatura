@@ -957,3 +957,21 @@ def test_author_markers(decoy, marker):
 def test_author_discard_markers(marker):
     "Authors inside discarded sections are ignored."
     assert extract_metadata(wrap(marker, '<span class="author">Jenny Smith</span>')).author is None
+
+
+@pytest.mark.parametrize(
+    "meta",
+    [
+        '<meta property="og:title" content="{}"/>',
+        '<meta name="twitter:title" content="{}"/>',
+        '<meta itemprop="headline" content="{}"/>',
+    ],
+)
+def test_title_cut_at_a_quote(meta):
+    "an unescaped quote ends the meta attribute early, the title element holds the whole headline"
+    title = 'Mayor says the bridge is "ready to open" next month'
+    page = f"<html><head><title>{title}</title>{meta.format(title)}</head><body></body></html>"
+    assert extract_metadata(page).title == title
+    # a complete meta title stays, the title element may hold more than the headline
+    page = f"<html><head><title>Bridge opens | Example News</title>{meta.format('Bridge opens')}</head><body></body></html>"
+    assert extract_metadata(page).title == "Bridge opens"
