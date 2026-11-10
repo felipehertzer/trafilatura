@@ -100,6 +100,30 @@ AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
+AUTHOR_ROLE_WORDS = frozenset(
+    {
+        "editor", "correspondent", "reporter", "writer", "journalist", "producer", "columnist", "presenter",
+        "host", "contributor", "critic", "photographer", "spokesperson", "spokesman", "spokeswoman",
+        "commentator", "analyst", "anchor", "director", "manager", "professor", "fellow", "lecturer",
+        "researcher", "historian", "founder", "officer", "economist", "scientist", "president", "chair",
+        "adviser", "advisor", "consultant", "coordinator", "teacher", "ceo", "cmo", "cto", "cfo", "coo",
+    }
+)  # fmt: skip
+# The words of a job title before its role: "Political editor", "Senior
+# political correspondent", "Environment and climate correspondent".
+AUTHOR_TITLE_WORDS = frozenset(
+    {
+        "and", "political", "senior", "chief", "deputy", "environment", "consumer", "technology", "diplomatic",
+        "foreign", "business", "sports", "sport", "health", "science", "economics", "economic", "education",
+        "arts", "culture", "music", "film", "food", "travel", "fashion", "property", "legal", "crime",
+        "defence", "defense", "transport", "energy", "investigations", "investigative", "data", "digital",
+        "national", "state", "regional", "rural", "world", "global", "europe", "asia", "pacific", "media",
+        "social", "entertainment", "lifestyle", "finance", "markets", "managing", "executive", "associate",
+        "assistant", "contributing", "special", "staff", "local", "community", "multimedia", "news",
+        "features", "opinion", "politics", "climate", "medical",
+    }
+)  # fmt: skip
+AUTHOR_SEGMENT = re.compile(r"[^;|/,&]+")
 AUTHOR_EMOJI_REMOVE = re.compile(
     "["
     "\U00002700-\U000027be"  # Dingbats
@@ -332,6 +356,33 @@ def normalize_json_values(value: Any) -> Any:
     return value
 
 
+def _strip_job_title(segment: str) -> str:
+    """Drop a job title after a name: "Jane Doe Political editor" -> "Jane Doe".
+
+    From the third word on, the title is a role and the words before it that
+    are lower case, "and" or a title word. Only the title goes: "Jane Doe
+    Chief political correspondent and John Roe" keeps John Roe.
+    """
+    tokens = segment.split()
+    # the name starts after the credit words ("By Staff Writer" is a role, not a name; in "words: Jane
+    # Officer" the surname is no role): the ones AUTHOR_PREFIX removes later, colon aside
+    prefix = AUTHOR_PREFIX.match(" ".join(tokens).replace(":", "") + " ")
+    start = len(prefix.group().split()) if prefix else 0
+    role = next((index for index, token in enumerate(tokens) if token.casefold() in AUTHOR_ROLE_WORDS), None)
+    if role is None or role < start + 2:
+        return segment
+    # a name takes two words; after an outlet's possessive the title starts at once ("EXN's Chief Media
+    # Analyst Jane Doe")
+    name_end = start + (1 if tokens[start].endswith(("'s", "’s")) else 2)
+    end = role
+    while end > name_end and (tokens[end - 1].islower() or tokens[end - 1].casefold() in AUTHOR_TITLE_WORDS):
+        end -= 1
+    # a capitalised role word right after the name may be a surname ("Mary Ann Fellow")
+    if end == role and not tokens[role].islower():
+        return segment
+    return " " + " ".join(tokens[:end] + tokens[role + 1 :]) + " "
+
+
 def normalize_authors(current_authors: str | None, author_string: str) -> str | None:
     """Normalize author info to focus on author names only"""
     new_authors = []
@@ -350,6 +401,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author_string = unescape(author_string)
     # remove html tags
     author_string = HTML_STRIP_TAGS.sub("", author_string)
+    author_string = AUTHOR_SEGMENT.sub(lambda match: _strip_job_title(match.group()), author_string)
     # examine names
     for author in AUTHOR_SPLIT.split(author_string):
         author = trim(author)

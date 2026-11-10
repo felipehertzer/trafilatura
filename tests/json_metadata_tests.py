@@ -1304,3 +1304,24 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    ("byline", "expected"),
+    [
+        ("Jane Doe Political editor", "Jane Doe"),
+        ("By Jane Doe Political editor", "Jane Doe"),
+        ("Jane Doe Environment and climate correspondent", "Jane Doe"),
+        ("Jane Doe Chief political correspondent and John Roe", "Jane Doe; John Roe"),
+        ("Mary Anne Smith editor", "Mary Anne Smith"),
+        # after an outlet's possessive the title starts at once
+        ("EXN's Chief Media Analyst Jane Doe", "EXN's Jane Doe"),
+        # a name of two words comes first, a role word may be a surname
+        ("By Staff Writer", "Staff Writer"),
+        ("words: Jane Officer", "Jane Officer"),
+        ("Mary Ann Fellow", "Mary Ann Fellow"),
+    ],
+)
+def test_normalize_authors_job_titles(byline, expected):
+    "A job title after the name is no part of it."
+    assert normalize_authors(None, byline) == expected
