@@ -1304,3 +1304,21 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    ("byline", "expected"),
+    [
+        # a radio station's frequency belongs to its name
+        ("Example 105.1 Contributors", "Example 105.1 Contributors"),
+        ("92.9 Example FM Contributors", "92.9 Example FM Contributors"),
+        # a number after the name still ends it: a date, a time, a reading time
+        ("Jane Doe 1 October 2025 22 1", "Jane Doe"),
+        ("von Jane 18.10.2019 16:06 Uhr", "Jane"),
+        ("Jane Doe 2.30pm", "Jane Doe"),
+        ("Example The Nightly 2 Min Read Updated Comments", "Example The Nightly"),
+    ],
+)
+def test_normalize_authors_station_frequency(byline, expected):
+    "A frequency followed by words is part of a station's name, other numbers end the name."
+    assert normalize_authors(None, byline) == expected

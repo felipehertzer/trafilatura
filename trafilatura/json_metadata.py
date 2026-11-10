@@ -93,8 +93,13 @@ JSON_SEQ = [('"name"', JSON_NAME), ('"headline"', JSON_HEADLINE)]
 
 AUTHOR_PREFIX = re.compile(r"^([a-zäöüß]+(ed|t))? ?(written by|words by|words|by|von|from) ", flags=re.IGNORECASE)
 AUTHOR_REMOVE_NUMBERS = re.compile(r"\d.+?$")
+# a decimal number with words after it, a radio station's frequency ("92.9 Example FM"); a date has two
+# dots ("18.10.2019") and a time no space before its letters ("2.30pm")
+AUTHOR_FREQUENCY = re.compile(r"(?<![\w.])\d+\.\d+(?![.\d])\s+[^\W\d_]")
 AUTHOR_TWITTER = re.compile(r"@[\w]+")
-AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
+AUTHOR_LETTER = re.compile(r"[^\W\d_]")
+# a dot joins a handle's parts ("john.smith"), a decimal point stays ("Example 105.1")
+AUTHOR_REPLACE_JOIN = re.compile(r"[._+](?!(?<=\d\.)\d)")
 AUTHOR_REMOVE_NICKNAME = re.compile(r'["‘({\[’\'][^"]+?[‘’"\')\]}]')
 AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
@@ -363,15 +368,20 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         # remove special characters
         author = AUTHOR_REMOVE_SPECIAL.sub("", author)
         author = AUTHOR_PREFIX.sub("", author)
-        author = AUTHOR_REMOVE_NUMBERS.sub("", author)
+        # a number ends the name ("Jane Doe 1 October 2025"), but a frequency followed by words
+        # belongs to a station's name ("Example 105.1 Contributors")
+        if not AUTHOR_FREQUENCY.search(author):
+            author = AUTHOR_REMOVE_NUMBERS.sub("", author)
         author = AUTHOR_REMOVE_PREPOSITION.sub("", author)
         # skip empty or improbably long strings
         # simple heuristics, regex or vowel tests also possible
         if not author or (len(author) >= 50 and " " not in author and "-" not in author):
             continue
-        # title case
+        # title case; the first letter decides, a station's frequency may lead ("92.9 Example FM")
         if not author[0].isupper():
-            author = author.title()
+            first_letter = AUTHOR_LETTER.search(author)
+            if first_letter is None or not first_letter.group().isupper():
+                author = author.title()
         if author not in new_authors:
             new_authors.append(author)
     # keep only the fullest form of each name (drop names contained in another)
