@@ -1547,3 +1547,18 @@ def test_normalize_authors_datelines(byline, expected):
 def test_normalize_authors_credit_prefixes(byline, expected):
     "Credit prefixes are removed without turning their words into extra authors."
     assert normalize_authors(None, byline) == expected
+
+
+@pytest.mark.parametrize(
+    "author_string, expected",
+    [
+        ("Jane Doe say", "Jane Doe"),
+        ("Jane Doe says", "Jane Doe"),
+        ("Jane Doe said", "Jane Doe"),
+        # a capitalised surname is no verb
+        ("Ahmet Say", "Ahmet Say"),
+    ],
+)
+def test_normalize_authors_speech_verbs(author_string, expected):
+    "a reported-speech verb taken with the name is not part of it"
+    assert normalize_authors(None, author_string) == expected
