@@ -957,3 +957,33 @@ def test_author_markers(decoy, marker):
 def test_author_discard_markers(marker):
     "Authors inside discarded sections are ignored."
     assert extract_metadata(wrap(marker, '<span class="author">Jenny Smith</span>')).author is None
+
+
+@pytest.mark.parametrize(
+    ("byline", "expected"),
+    [
+        (
+            (
+                '<p class="byline"><a href="/tag/emotions/" rel="tag">Emotions</a> | '
+                '<a href="/tag/advice/" rel="tag">Parenting Advice</a> | <span>Laura Example</span></p>'
+            ),
+            "Laura Example",
+        ),
+        (
+            (
+                '<div class="byline"><span><a href="/category/family/" rel="category tag">Family</a>, '
+                '<a href="/tag/school/" rel="tag">School</a></span> <span>By Laura Example</span></div>'
+            ),
+            "Laura Example",
+        ),
+        # a term link inside the element the page marks as the author is the name
+        ('<p class="byline">By <a href="/tag/jane-doe/" rel="author tag">Jane Doe</a></p>', "Jane Doe"),
+        (
+            '<p class="byline">By <span class="author vcard"><a href="/writer/jane-doe/" rel="tag">Jane Doe</a></span></p>',
+            "Jane Doe",
+        ),
+    ],
+)
+def test_byline_without_tag_links(byline, expected):
+    "Links the page marks as tags name topics, not authors."
+    assert extract_metadata(f"<html><body>{byline}</body></html>").author == expected
