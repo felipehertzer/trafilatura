@@ -582,10 +582,10 @@ def _article_end_marks(tree: HtmlElement, order: dict[_Element, int]) -> list[in
 def _drop_trailing_furniture(
     result_body: _Element, recovered: list[tuple[_Element, int, list[_Element]]], order: dict[_Element, int], marks: list[int]
 ) -> None:
-    """Remove the recovered blocks that come after the article's end, outside its region: the deepest
-    element holding two thirds of the recovered text."""
+    """Remove the recovered blocks outside the article's region (the deepest element holding two thirds
+    of the recovered text) that come after its end, or before it without being a sentence."""
     total = sum(len(_elem_text(block)) for block, _, _ in recovered)
-    if not total or not marks:
+    if not total:
         return
     weight: dict[_Element, int] = {}
     for block, _, ancestors in recovered:
@@ -595,13 +595,24 @@ def _drop_trailing_furniture(
     if not candidates:
         return
     region = max(candidates, key=lambda elem: sum(1 for _ in elem.iterancestors()))
+    region_start = order.get(region, -1)
     region_end = max(order.get(elem, -1) for elem in region.iter())
     cut = next((mark for mark in marks if mark > region_end), None)
-    if cut is None:
-        return
     for block, start, ancestors in recovered:
-        if start > cut and region not in ancestors:
+        if region in ancestors:
+            continue
+        # after the article's end, or a line before the story that is no sentence (its byline and date)
+        if (cut is not None and start > cut) or (start < region_start and not _is_sentence(_elem_text(block))):
             result_body.remove(block)
+
+
+SENTENCE_MIN_WORDS = 15
+_SENTENCE_END = re.compile(r"[.!?…][\"'’”)]?$")
+
+
+def _is_sentence(text: str) -> bool:
+    "Prose: a line that ends a sentence or runs long, not a label, credit or dateline."
+    return bool(_SENTENCE_END.search(text.strip())) or len(text.split()) >= SENTENCE_MIN_WORDS
 
 
 def recover_wild_text(

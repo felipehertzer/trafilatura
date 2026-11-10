@@ -5329,3 +5329,15 @@ def test_promos_after_a_recovered_story_end(fast):
         assert sentence in text
     assert "daily dose" not in text
     assert "news release" not in text
+
+
+@pytest.mark.parametrize("fast", [False, True])
+def test_byline_line_before_a_recovered_story(fast):
+    "A line before a story recovered from the whole page that is no sentence is its byline or date."
+    standfirst = "Wall Street fell for a second day as the ceasefire deadline neared and oil prices climbed again."
+    text = extract(frameless_story_page(before=f"<p>{standfirst}</p>"), fast=fast)
+    assert "22 Apr 2026" not in text
+    # a standfirst before the story is a sentence and stays
+    assert text.startswith(standfirst)
+    for sentence in RECOVERED_STORY:
+        assert sentence in text
