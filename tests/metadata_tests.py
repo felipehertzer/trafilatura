@@ -726,3 +726,61 @@ def test_block_boundaries_not_fused():
 
     inline = extract_metadata("<html><body><h1>Hyper<span>link</span>ed</h1></body></html>")
     assert inline.title == "Hyperlinked"
+
+
+STORY_TEXT = "<p>" + "The council confirmed on Saturday that the new bridge will open to traffic next month. " * 3 + "</p>"
+
+
+@pytest.mark.parametrize(
+    ("head", "body", "expected"),
+    [
+        # a "By" line between the headline and the first sentence fills a page without a byline
+        ("", "<h1>Bridge opens next month</h1><p><strong>By Jane Doe</strong></p>", "Jane Doe"),
+        ("", "<h1>Bridge opens next month</h1><p>Words by Ana de Souza</p>", "Ana de Souza"),
+        (
+            "",
+            '<h1>Bridge opens next month</h1><p>By <a href="/a/jd">Jane Doe</a> and <a href="/a/jr">John Roe</a></p>',
+            "Jane Doe; John Roe",
+        ),
+        # it outranks a meta author naming someone else, the account that published the story
+        ('<meta name="author" content="Site Admin"/>', "<h1>Bridge opens next month</h1><p>By Jane Doe</p>", "Jane Doe"),
+        # a full name over the dateline in the same block, under a heading that is the title
+        (
+            '<meta property="og:title" content="Bridge opens next month"/>',
+            "<h2>Bridge opens next month</h2><p>Jane Doe <br>09 Nov 2026, 04:06 GMT+10 </p>",
+            "Jane Doe",
+        ),
+        # the headline sits inside a block bylines leave out
+        (
+            '<meta name="author" content="Site Admin"/>',
+            '<div class="title"><h1>Bridge opens next month</h1></div><p>By Jane Doe</p>',
+            "Jane Doe",
+        ),
+        # a byline the page marks as one stays, and co-authors the meta adds are kept
+        ("", '<h1>Bridge opens next month</h1><p class="byline">Jane Doe</p><p>By John Roe</p>', "Jane Doe"),
+        (
+            '<meta name="author" content="Jane Doe, John Roe"/>',
+            '<h1>Bridge opens next month</h1><p>By <a href="/author/jane-doe">Jane Doe</a></p>',
+            "Jane Doe; John Roe",
+        ),
+        # no credit: one word over a dateline, a label over a labelled date, a link within the page,
+        # a handle beside a role, or a "By" line after the first sentence
+        ("", "<h1>Bridge opens next month</h1><p>Council <br>09 Nov 2026, 04:06 GMT+10 </p>", None),
+        ("", "<h1>Bridge opens next month</h1><p>Venue Townhall<br>Date 28.01.2022</p>", None),
+        ("", '<h1>Bridge opens next month</h1><p>By <a href="#respond">No Comments</a></p>', None),
+        ("", '<h1>Bridge opens next month</h1><p>By <a href="/users/jdoe">Jdoe</a> Community Contributor</p>', None),
+        ("", f"<h1>Bridge opens next month</h1>{STORY_TEXT}<p>By John Roe</p>", None),
+    ],
+)
+def test_story_credit(head, body, expected):
+    "the credit a story opens with, between its headline and its first sentence, names its author"
+    page = f"<html><head><title>Bridge opens next month</title>{head}</head><body>{body}{STORY_TEXT}</body></html>"
+    assert extract_metadata(page).author == expected
+
+
+def test_story_credit_and_author_blacklist():
+    "a blacklisted byline leaves the place to the story credit, a blacklisted credit is none"
+    body = '<h1>Bridge opens next month</h1><div class="author">Production Desk</div><p>By Jane Doe</p>' + STORY_TEXT
+    page = f"<html><head><title>Bridge opens next month</title></head><body>{body}</body></html>"
+    assert extract_metadata(page, author_blacklist={"Production Desk"}).author == "Jane Doe"
+    assert extract_metadata(page, author_blacklist={"Production Desk", "Jane Doe"}).author is None

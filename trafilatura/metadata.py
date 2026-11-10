@@ -20,7 +20,6 @@ from lxml.etree import XPath
 from lxml.html import HtmlElement, tostring
 
 from .baseline import block_text
-from .htmlprocessing import prune_unwanted_nodes
 from .json_metadata import (
     extract_json,
     extract_json_parse_error,
@@ -30,6 +29,7 @@ from .json_metadata import (
 )
 from .settings import Document, set_date_params
 from .utils import HTML_STRIP_TAGS, line_processing, load_html, safe_base_url, trim
+from .xml import delete_element
 from .xpaths import (
     AUTHOR_DISCARD_XPATHS,
     AUTHOR_XPATHS,
@@ -362,14 +362,173 @@ def extract_title(tree: HtmlElement) -> str | None:
     return title or None
 
 
-def extract_author(tree: HtmlElement) -> str | None:
+def byline_discards(tree: HtmlElement) -> set[HtmlElement]:
+    "The elements a byline is not read from. Evaluated once per page: the byline and the story credit share them."
+    return {elem for expression in AUTHOR_DISCARD_XPATHS for elem in expression(tree)}
+
+
+def extract_author(tree: HtmlElement, discarded: set[HtmlElement] | None = None) -> str | None:
     """Extract the document author(s)"""
-    subtree = prune_unwanted_nodes(deepcopy(tree), AUTHOR_DISCARD_XPATHS)
+    if discarded is None:
+        discarded = byline_discards(tree)
+    # a copy holds its elements in the order of the original: the discarded ones leave the copy
+    subtree = deepcopy(tree)
+    for elem in [copy for original, copy in zip(tree.iter(), subtree.iter(), strict=True) if original in discarded]:
+        delete_element(elem)  # the tail text is preserved
     author = extract_metainfo(subtree, AUTHOR_XPATHS, len_limit=120)
     if author:
         author = normalize_authors(None, author)
     # copyright?
     return author
+
+
+# The credit a story opens with, between its headline and its first sentence: a "By" line ("By: Jane Doe"),
+# or a full name over the dateline in the same block ("Jane Doe<br>09 Nov 2026, 04:06 GMT+10").
+STORY_BY_LINE = re.compile(
+    r"^(?:by|written by|words by|story by|words and pictures by|reported by|report by)\s*:?\s+(?=\S)", re.IGNORECASE
+)
+STORY_DATELINE = re.compile(r"\b(?:19|20)\d{2}\b|\b\d{1,2}:\d{2}\b")
+# a dateline opens with the date: a number, or a month or weekday before the day ("Sep 12, 2025"); a label before
+# a date ("Date 28.01.2022" under "Venue Townhall") makes the line above a label too
+STORY_DATELINE_START = re.compile(r"^(?:\d|[^\W\d_]+\.?,?\s+\d{1,2}(?:st|nd|rd|th)?\b(?![.:/]\d))")
+STORY_SENTENCE_END = re.compile(r"[.!?…][\"'’”)]?$")
+STORY_SENTENCE_WORDS = 15
+STORY_CREDIT_LINES = 12
+# a name's word: a capital and letters, with apostrophes, hyphens or an initial's dot ("O'Neil", "J.")
+NAME_WORD = re.compile(r"^[^\W\d_][^\W\d_'’.\-]*(?:['’.\-][^\W\d_]*)*\.?$")
+NAME_PARTICLES = frozenset(
+    {"al", "bin", "binti", "da", "das", "de", "del", "della", "den", "der", "di", "do", "dos", "du", "la", "le", "ter",
+     "van", "von"}
+)  # fmt: skip
+NAMES_JOIN = re.compile(r"\s+(?:and|&)\s+|,\s+")
+INLINE_TAGS = frozenset(
+    {"a", "abbr", "b", "bdi", "bdo", "cite", "data", "del", "em", "font", "i", "img", "ins", "label", "mark", "q", "s",
+     "small", "span", "strong", "sub", "sup", "time", "u", "wbr"}
+)  # fmt: skip
+STORY_SKIP_TAGS = frozenset(
+    {"button", "figcaption", "figure", "form", "head", "iframe", "input", "link", "meta", "nav", "noscript", "option",
+     "script", "select", "style", "svg", "template", "textarea", "title"}
+)  # fmt: skip
+HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+
+
+def _normalize_space(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _is_story_sentence(line: str) -> bool:
+    "Prose: a line that ends a sentence or runs long."
+    return bool(STORY_SENTENCE_END.search(line)) or len(line.split()) >= STORY_SENTENCE_WORDS
+
+
+def _is_dateline(line: str) -> bool:
+    return (
+        STORY_DATELINE_START.match(line) is not None
+        and STORY_DATELINE.search(line) is not None
+        and len(line.split()) <= 8
+        and not _is_story_sentence(line)
+    )
+
+
+def _is_full_name(text: str) -> bool:
+    "Two to five capitalised words (particles aside): a full name, not a label, a brand or a phrase."
+    words = text.split()
+    return 2 <= len(words) <= 5 and all(
+        word.casefold() in NAME_PARTICLES or (NAME_WORD.match(word) is not None and word[0].isupper()) for word in words
+    )
+
+
+def _line_parts(elem: HtmlElement, discarded: set[HtmlElement], lines: list[tuple[list[str], list[str]]]) -> None:
+    "Add the inline text of elem to the current line; a line break or a child block starts a new one."
+    for child in elem:
+        if not isinstance(child.tag, str) or child in discarded:
+            lines[-1][0].append(child.tail or "")
+        elif child.tag == "br":
+            lines.append(([child.tail or ""], []))
+        elif child.tag in INLINE_TAGS:
+            # a profile link names the author; an in-page link ("#respond": "No Comments") does not
+            if child.tag == "a":
+                lines[-1][1].append(_normalize_space(child.text_content()) if "#" not in child.get("href", "#") else "")
+            lines[-1][0].append(" " + (child.text or ""))
+            _line_parts(child, discarded, lines)
+            lines[-1][0].append(" " + (child.tail or ""))
+        else:
+            lines.append(([child.tail or ""], []))
+
+
+def _story_lines(
+    tree: HtmlElement, headline: HtmlElement, discarded: set[HtmlElement]
+) -> list[tuple[str, int, str, list[str], bool]]:
+    "The text lines after the headline, block by block: tag, block number, text, linked names, any links at all."
+    result: list[tuple[str, int, str, list[str], bool]] = []
+    started, block = False, 0
+    for elem in tree.iter():
+        if elem is headline:
+            started = True
+            continue
+        if not started or not isinstance(elem.tag, str) or elem.tag in INLINE_TAGS or elem.tag in STORY_SKIP_TAGS:
+            continue
+        if elem in discarded or any(
+            parent is headline or parent in discarded or parent.tag in STORY_SKIP_TAGS for parent in elem.iterancestors()
+        ):
+            continue
+        lines: list[tuple[list[str], list[str]]] = [([elem.text or ""], [])]
+        _line_parts(elem, discarded, lines)
+        block += 1
+        for parts, links in lines:
+            text = _normalize_space("".join(parts))
+            if text:
+                result.append((elem.tag, block, text, [link for link in links if link], bool(links)))
+        if len(result) >= STORY_CREDIT_LINES:
+            break
+    return result[:STORY_CREDIT_LINES]
+
+
+def extract_story_credit(tree: HtmlElement, title: str | None, discarded: set[HtmlElement] | None = None) -> str | None:
+    """The names a story's own credit gives, between its headline (the h1 or h2 that is its title) and its first
+    sentence, read as extract_author reads the page (AUTHOR_DISCARD_XPATHS left out)."""
+    if not title:
+        return None
+    wanted = _normalize_space(title).casefold()
+    # no heading is the title: nothing to read, and no need to look for what to leave out
+    if not any(_normalize_space(elem.text_content()).casefold() == wanted for elem in tree.iter("h1", "h2")):
+        return None
+    if discarded is None:
+        discarded = byline_discards(tree)
+    headline = next(
+        (
+            elem
+            for elem in tree.iter("h1", "h2")
+            if _normalize_space(elem.text_content()).casefold() == wanted and elem not in discarded
+        ),
+        None,
+    )
+    if headline is None:
+        return None
+    lines = _story_lines(tree, headline, discarded)
+    for index, (tag, block, line, links, linked) in enumerate(lines):
+        if _is_story_sentence(line):
+            return None
+        if tag in HEADING_TAGS or line.casefold() == wanted:
+            continue
+        if match := STORY_BY_LINE.match(line):
+            # a linked by-line names the people it links to, not what sits beside them ("Jdoe Community
+            # Contributor"); one linking only within the page names no one
+            names = links if linked else [part for part in NAMES_JOIN.split(line[match.end() :]) if part]
+            if names and all(_is_full_name(name) for name in names):
+                return "; ".join(links) if linked else line[match.end() :]
+            continue
+        if index + 1 < len(lines):
+            _, next_block, next_line, _, _ = lines[index + 1]
+            if next_block == block and _is_full_name(line) and _is_dateline(next_line):
+                return line
+    return None
+
+
+def _holds_names(credit: str, names: str) -> bool:
+    "Whether a credit holds every word of the names."
+    held = {word.casefold() for word in re.findall(r"[^\W\d_]+", credit)}
+    return all(word.casefold() in held for word in re.findall(r"[^\W\d_]+", names))
 
 
 def extract_url(tree: HtmlElement, default_url: str | None = None) -> str | None:
@@ -515,8 +674,29 @@ def extract_metadata(
     if metadata.author and author_blacklist:
         metadata.author = check_authors(metadata.author, author_blacklist)
     # author
+    byline_author = None
+    discarded = None
     if not metadata.author:
-        metadata.author = extract_author(tree)
+        discarded = byline_discards(tree)
+        byline_author = extract_author(tree, discarded)
+        # a blacklisted byline is none: the story credit may name the author
+        if byline_author and author_blacklist:
+            byline_author = check_authors(byline_author, author_blacklist)
+        metadata.author = byline_author
+    # The credit a story opens with names its writer. It fills a page without a byline, and it outranks a meta
+    # or JSON-LD author naming someone else, such as the account that published the story; a byline the page
+    # marks as one stays.
+    if not byline_author and (credit := extract_story_credit(tree, metadata.title, discarded)):
+        # normalize_authors must keep the whole credit: what it cuts was no name
+        names = normalize_authors(None, credit)
+        credit = names if names and _holds_names(names, credit.replace(" and ", " ")) else None
+        if credit and author_blacklist:
+            credit = check_authors(credit, author_blacklist)
+        # an author and a credit where one holds the other's names keep the author (co-authors the meta adds)
+        if credit and not (
+            metadata.author and (_holds_names(metadata.author, credit) or _holds_names(credit, metadata.author))
+        ):
+            metadata.author = credit
     # recheck author in blacklist
     if metadata.author and author_blacklist:
         metadata.author = check_authors(metadata.author, author_blacklist)
