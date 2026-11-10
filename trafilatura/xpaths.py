@@ -431,6 +431,16 @@ AUTHOR_DISCARD_XPATHS = [
         """,
         namespaces={"re": REGEXP_NS},
     ),
+    # a link the page marks as a tag (rel="tag", rel="category tag") names a topic, unless it is
+    # inside the element the page marks as the author: a byline taxonomy's terms are tags too
+    XPath(
+        """
+        .//*[@rel and re:test(@rel, '(?:^|\\s)tag(?:\\s|$)', 'i') and not(ancestor-or-self::*[
+        re:test(@rel, '(?:^|\\s)author(?:\\s|$)', 'i') or contains(@itemprop, 'author') or
+        re:test(@class, '(?:^|\\s)author(?:\\s|$)|[Aa]uthor-?[Nn]ame')])]
+        """,
+        namespaces={"re": REGEXP_NS},
+    ),
     XPath("//time|//figure"),
 ]
 
