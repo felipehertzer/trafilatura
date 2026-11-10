@@ -1304,3 +1304,18 @@ def test_json_non_schema_org_context(context):
         "</script></head><body><p>x</p></body></html>"
     )
     assert extract_metadata(html).author is None
+
+
+@pytest.mark.parametrize(
+    "author_string, expected",
+    [
+        ("Jane Doe say", "Jane Doe"),
+        ("Jane Doe says", "Jane Doe"),
+        ("Jane Doe said", "Jane Doe"),
+        # a capitalised surname is no verb
+        ("Ahmet Say", "Ahmet Say"),
+    ],
+)
+def test_normalize_authors_speech_verbs(author_string, expected):
+    "a reported-speech verb taken with the name is not part of it"
+    assert normalize_authors(None, author_string) == expected
