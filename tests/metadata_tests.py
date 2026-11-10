@@ -1125,3 +1125,19 @@ LANG_LD = (
 def test_markup_language(page, expected):
     "The language declared in the markup fills the metadata, the text is not analyzed here (#1183)."
     assert extract_metadata(page).language == expected
+
+
+@pytest.mark.parametrize(
+    "badge",
+    [
+        '<span class="article-meta-status"><a href="#review">Reviewed</a></span>',
+        '<span class="post-meta-status">Fact checked</span>',
+    ],
+)
+def test_byline_status_badge(badge):
+    "A review or fact-check status badge in the byline row is no author."
+    byline = (
+        '<div class="article-meta-byline"><span class="article-meta-source"><a href="/source">Example State University'
+        f'</a></span><span class="article-meta-date">Sep 26 2026</span>{badge}</div>'
+    )
+    assert extract_metadata(f"<html><body>{byline}</body></html>").author == "Example State University"
