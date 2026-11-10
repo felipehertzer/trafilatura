@@ -408,6 +408,35 @@ AUTHOR_ID_ANY = re.compile("[Aa]uthor")
 AUTHOR_CLASS_ANY = re.compile("[Aa]uthor|screenname|writer|[Bb]yline")
 
 
+# A teaser for another story is no byline. A candidate holding that story's headline with its link,
+# or sitting in a link around a card with a heading or a title, is the card. A heading naming the
+# author (an author class, rel="author") is the byline's own.
+_HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
+AUTHOR_MENTION = re.compile("[Aa]uthor")
+TEASER_TITLE_CLASS = re.compile(r"(?:^|\s)(?:title|headline)(?:\s|$)")
+
+
+def _is_teaser(elem: HtmlElement) -> bool:
+    "The element holds a linked heading not naming the author, or sits in a link around a heading or a title."
+    for heading in elem.iter(*_HEADINGS):
+        links = list(heading.iterdescendants("a"))
+        linked = any("href" in link.attrib for link in links) or any(
+            "href" in link.attrib for link in heading.iterancestors("a")
+        )
+        names_author = AUTHOR_MENTION.search(heading.get("class", "")) or any(
+            link.get("rel") == "author" or AUTHOR_MENTION.search(link.get("class", "")) for link in links
+        )
+        if linked and not names_author:
+            return True
+    return any(
+        "href" in link.attrib
+        and any(
+            sub.tag in _HEADINGS or TEASER_TITLE_CLASS.search(sub.get("class", "")) for sub in link.iterdescendants(Element)
+        )
+        for link in elem.iterancestors("a")
+    )
+
+
 def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
     "Specific and almost specific author markers."
     return [
@@ -428,10 +457,13 @@ def _author_generic(tree: HtmlElement) -> list[HtmlElement]:
     return [
         elem
         for elem in tree.iter("a", "div", "h3", "h4", "p", "span")
-        if elem.get("class") in ("byline", "username", "byl", "BBL")
-        or "author" in elem.get("itemprop", "")
-        or AUTHOR_ID_GENERIC.search(elem.get("id", ""))
-        or AUTHOR_CLASS_GENERIC.search(elem.get("class", ""))
+        if (
+            elem.get("class") in ("byline", "username", "byl", "BBL")
+            or "author" in elem.get("itemprop", "")
+            or AUTHOR_ID_GENERIC.search(elem.get("id", ""))
+            or AUTHOR_CLASS_GENERIC.search(elem.get("class", ""))
+        )
+        and not _is_teaser(elem)
     ]
 
 
@@ -440,10 +472,13 @@ def _author_any(tree: HtmlElement) -> list[HtmlElement]:
     return [
         elem
         for elem in tree.iter(Element)
-        if "Byline" in elem.get("data-component", "")
-        or "author" in elem.get("itemprop", "")
-        or AUTHOR_ID_ANY.search(elem.get("id", ""))
-        or AUTHOR_CLASS_ANY.search(elem.get("class", ""))
+        if (
+            "Byline" in elem.get("data-component", "")
+            or "author" in elem.get("itemprop", "")
+            or AUTHOR_ID_ANY.search(elem.get("id", ""))
+            or AUTHOR_CLASS_ANY.search(elem.get("class", ""))
+        )
+        and not _is_teaser(elem)
     ]
 
 
