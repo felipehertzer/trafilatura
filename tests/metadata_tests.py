@@ -957,3 +957,16 @@ def test_author_markers(decoy, marker):
 def test_author_discard_markers(marker):
     "Authors inside discarded sections are ignored."
     assert extract_metadata(wrap(marker, '<span class="author">Jenny Smith</span>')).author is None
+
+
+@pytest.mark.parametrize(
+    "inner",
+    [
+        "<script>var story_id = 123; console.log(story_id);</script>",
+        "<style>.byline { display: block; }</style>",
+    ],
+)
+def test_author_without_script_and_style_text(inner):
+    "The code of a script or style element inside the byline is no name."
+    page = f'<html><body><span class="author">Jane Doe{inner}</span></body></html>'
+    assert extract_metadata(page).author == "Jane Doe"
