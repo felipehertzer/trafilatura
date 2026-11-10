@@ -1322,3 +1322,21 @@ def test_a_sentence_under_a_related_label_is_the_storys():
     text = story_text(tail)
     assert text.endswith(last)
     assert "Council approves the second bridge" not in text
+
+
+@pytest.mark.parametrize(
+    "before",
+    [
+        '<h2 class="subheadline"><strong>A strange birthday</strong></h2>',
+        "<div><ul><li>Broadford</li><li>Tallarook</li></ul></div>",
+    ],
+)
+def test_what_precedes_a_part_hidden_again_inside_the_story_stays(before):
+    # the notice stands in for the text in the visible page; inside the revealed story nothing does
+    ad = "<div><script>googletag.cmd.push(function() { googletag.display('div-gpt-ad-MREC3'); });</script></div>"
+    text = bare_extraction(locked_page().replace(ad, before), include_comments=False, with_metadata=False).text
+    for kept in re.findall(r">([^<>]+)<", before):
+        assert kept in text
+    for sentence in LOCKED:
+        assert sentence in text
+    assert "Hold tight" not in text

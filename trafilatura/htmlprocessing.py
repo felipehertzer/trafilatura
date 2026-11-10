@@ -154,18 +154,21 @@ _NESTED_CONTINUATION_XPATH = XPath(
 
 def reveal_hidden_continuation(tree: HtmlElement) -> None:
     """Un-hide the rest of an article kept behind a continue-reading control. A notice that stands
-    in for the text until a script loads it goes: the text is there now (buttons go in cleaning)."""
+    in for the text until a script loads it goes: the text is there now (buttons go in cleaning).
+    Inside a part already revealed nothing stands in for anything: what precedes a part hidden again
+    there is the story's own (a subheading, a list)."""
     revealed: set[HtmlElement] = set()
     for elem in HIDDEN_CONTINUATION_XPATH(tree):
         # its own last block hidden again is the rest of the same story (McPherson's #lockable-2)
         for part in [elem, *_NESTED_CONTINUATION_XPATH(elem)]:
             if part in revealed:
                 continue
+            in_story = any(ancestor in revealed for ancestor in part.iterancestors())
             revealed.add(part)
             part.attrib.pop("hidden", None)
             part.attrib.pop("style", None)
             notice = part.getprevious()
-            if notice is not None and _STAND_IN_NOTICE(notice):
+            if not in_story and notice is not None and _STAND_IN_NOTICE(notice):
                 delete_element(notice, keep_tail=False)
 
 
