@@ -400,6 +400,7 @@ AUTHOR_DISCARD_ID = re.compile("^comments|comment-?list|ProductReviews")
 AUTHOR_DISCARD_CLASS = re.compile(
     "^[Cc]omments|commentlist|comments-list|sidebar|is-hidden|quote|embedly-instagram|"
     "article-(?:share|support)|print|category|meta-date|meta-reviewer"
+    r"|(?:^|\s)(?:cat|tags?)-links(?:\s|$)"
 )
 AUTHOR_CLASS_SPECIFIC = re.compile("author[- ]?name|AuthorName|authorName")
 AUTHOR_ID_GENERIC = re.compile("author|zuozhe|bianji|xiaobian")
