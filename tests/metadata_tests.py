@@ -1125,3 +1125,24 @@ LANG_LD = (
 def test_markup_language(page, expected):
     "The language declared in the markup fills the metadata, the text is not analyzed here (#1183)."
     assert extract_metadata(page).language == expected
+
+
+@pytest.mark.parametrize(
+    "box",
+    [
+        # the box holds the name and the prose about the writer
+        (
+            '<div id="author-bio" itemprop="author"><div class="author-details"><h4 class="author-name">Written by '
+            '<a href="/author/jane-doe">Jane Doe</a></h4><div class="author-about">Our team of writers from around '
+            "the country and some beyond.</div></div></div>"
+        ),
+        # the prose element holds the name heading: it is the box itself
+        (
+            '<div class="author-description"><h2 class="author-title">Jane Doe</h2>'
+            '<p class="author-bio">Jane writes about cities and the people who build them.</p></div>'
+        ),
+    ],
+)
+def test_byline_without_author_bio(box):
+    "An author box's prose about the writer is no byline."
+    assert extract_metadata(f"<html><body><p>Some text.</p>{box}</body></html>").author == "Jane Doe"

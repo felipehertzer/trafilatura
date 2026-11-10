@@ -408,6 +408,26 @@ AUTHOR_ID_ANY = re.compile("[Aa]uthor")
 AUTHOR_CLASS_ANY = re.compile("[Aa]uthor|screenname|writer|[Bb]yline")
 
 
+# An author box's prose about the writer is no byline, nor is an element holding it:
+# the name has an element of its own (div.author-about beside h4.author-name).
+# A prose element holding the name heading is the box itself.
+AUTHOR_BIO_CLASS = re.compile(r"(?:^|\s)author-(?:about|bio|description)(?:\s|$)")
+AUTHOR_NAME_OR_TITLE_CLASS = re.compile("[Aa]uthor-?(?:[Nn]ame|[Tt]itle)")
+_HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
+
+
+def _holds_author_bio(elem: HtmlElement) -> bool:
+    "The element is or holds an author box's prose, which holds no name heading."
+    return any(
+        not any(
+            sub.tag in _HEADINGS or AUTHOR_NAME_OR_TITLE_CLASS.search(sub.get("class", ""))
+            for sub in bio.iterdescendants(Element)
+        )
+        for bio in elem.iter(Element)
+        if AUTHOR_BIO_CLASS.search(bio.get("class", ""))
+    )
+
+
 def _author_specific(tree: HtmlElement) -> list[HtmlElement]:
     "Specific and almost specific author markers."
     return [
@@ -428,10 +448,13 @@ def _author_generic(tree: HtmlElement) -> list[HtmlElement]:
     return [
         elem
         for elem in tree.iter("a", "div", "h3", "h4", "p", "span")
-        if elem.get("class") in ("byline", "username", "byl", "BBL")
-        or "author" in elem.get("itemprop", "")
-        or AUTHOR_ID_GENERIC.search(elem.get("id", ""))
-        or AUTHOR_CLASS_GENERIC.search(elem.get("class", ""))
+        if (
+            elem.get("class") in ("byline", "username", "byl", "BBL")
+            or "author" in elem.get("itemprop", "")
+            or AUTHOR_ID_GENERIC.search(elem.get("id", ""))
+            or AUTHOR_CLASS_GENERIC.search(elem.get("class", ""))
+        )
+        and not _holds_author_bio(elem)
     ]
 
 
@@ -440,10 +463,13 @@ def _author_any(tree: HtmlElement) -> list[HtmlElement]:
     return [
         elem
         for elem in tree.iter(Element)
-        if "Byline" in elem.get("data-component", "")
-        or "author" in elem.get("itemprop", "")
-        or AUTHOR_ID_ANY.search(elem.get("id", ""))
-        or AUTHOR_CLASS_ANY.search(elem.get("class", ""))
+        if (
+            "Byline" in elem.get("data-component", "")
+            or "author" in elem.get("itemprop", "")
+            or AUTHOR_ID_ANY.search(elem.get("id", ""))
+            or AUTHOR_CLASS_ANY.search(elem.get("class", ""))
+        )
+        and not _holds_author_bio(elem)
     ]
 
 
