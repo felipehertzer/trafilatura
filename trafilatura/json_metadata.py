@@ -98,6 +98,9 @@ AUTHOR_REPLACE_JOIN = re.compile(r"[._+]")
 AUTHOR_REMOVE_NICKNAME = re.compile(r'["‘({\[’\'][^"]+?[‘’"\')\]}]')
 AUTHOR_REMOVE_SPECIAL = re.compile(r"[^\w]+$|[:()?*$#!%/<>{}~¿]")
 AUTHOR_REMOVE_PREPOSITION = re.compile(r"\b\s+(am|on|for|at|in|to|from|of|via|with|—|-|–)\s+(.*)", flags=re.IGNORECASE)
+# A date removed from a byline leaves its lead-in behind ("Jenny Smith on").
+# Lower case only: a name capitalizes its particles.
+AUTHOR_TRAILING_PREPOSITION = re.compile(r"\s+(?:am|on|for|at|in|to|from|of|via|with|um|le|el|il)$")
 AUTHOR_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 AUTHOR_SPLIT = re.compile(r"/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)", flags=re.IGNORECASE)
 AUTHOR_EMOJI_REMOVE = re.compile(
@@ -365,6 +368,7 @@ def normalize_authors(current_authors: str | None, author_string: str) -> str | 
         author = AUTHOR_PREFIX.sub("", author)
         author = AUTHOR_REMOVE_NUMBERS.sub("", author)
         author = AUTHOR_REMOVE_PREPOSITION.sub("", author)
+        author = AUTHOR_TRAILING_PREPOSITION.sub("", author)
         # skip empty or improbably long strings
         # simple heuristics, regex or vowel tests also possible
         if not author or (len(author) >= 50 and " " not in author and "-" not in author):

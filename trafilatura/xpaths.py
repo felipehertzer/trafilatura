@@ -431,6 +431,18 @@ AUTHOR_DISCARD_XPATHS = [
         """,
         namespaces={"re": REGEXP_NS},
     ),
+    # a timestamp is no name, unless the element is or holds the author ("date-author")
+    XPath(
+        """
+        .//*[(@datetime or @data-timestamp or @data-date or @data-datetime or
+        (@itemprop and starts-with(@itemprop, 'date')) or
+        (@class and (contains(@class, 'date') or contains(@class, 'timestamp')) and
+        re:test(@class, '(?:^|[\\s_-])(?:date|timestamp|pubdate)(?:[A-Z\\s_-]|$)')) or
+        contains(local-name(), 'timestamp')) and
+        not(descendant-or-self::*[re:test(@class, '[Aa]uthor|[Bb]yline') or @rel='author' or @itemprop='author'])]
+        """,
+        namespaces={"re": REGEXP_NS},
+    ),
     XPath("//time|//figure"),
 ]
 

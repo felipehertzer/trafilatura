@@ -726,3 +726,36 @@ def test_block_boundaries_not_fused():
 
     inline = extract_metadata("<html><body><h1>Hyper<span>link</span>ed</h1></body></html>")
     assert inline.title == "Hyperlinked"
+
+
+@pytest.mark.parametrize(
+    ("byline", "expected"),
+    [
+        # a byline holding only its timestamp
+        (
+            (
+                '<div class="Page-byline"><div class="Page-dateModified"><x-timestamp data-timestamp="1791261269000">'
+                '<span data-date="">Updated 3:34 PM AEDT, October 6, 2026</span></x-timestamp></div></div>'
+            ),
+            None,
+        ),
+        ('<div class="byline">By Jenny Smith <span class="post-date">October 6, 2026</span></div>', "Jenny Smith"),
+        ('<div class="byline">Jenny Smith <span data-datetime="2026-10-06">Yesterday</span></div>', "Jenny Smith"),
+        # the lead-in of a removed date
+        ('<div class="byline">By Jenny Smith on <span class="date">May 5, 2022</span></div>', "Jenny Smith"),
+        (
+            (
+                '<div class="author-line">Von <a class="username">Jana Beispiel</a> am '
+                '<span class="date-display-single">Samstag, 19. Oktober 2019 um 11:14 Uhr</span></div>'
+            ),
+            "Jana Beispiel",
+        ),
+        # a date element that is or holds the author stays, a name capitalizes its particles
+        ('<div class="byline-date"><span class="author">Jenny Smith</span> May 18 2022</div>', "Jenny Smith"),
+        ('<p class="date-author">Jenny Smith, 01.12.2021</p>', "Jenny Smith"),
+        ('<span class="author">Anh To</span>', "Anh To"),
+    ],
+)
+def test_byline_timestamps(byline, expected):
+    "A timestamp in the byline is no name, nor is the preposition before it."
+    assert extract_metadata(f"<html><body>{byline}</body></html>").author == expected
