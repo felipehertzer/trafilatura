@@ -32,6 +32,22 @@ def test_jsonld_headline_replaces_branded_meta_title():
     assert extract_metadata(page(head)).title == "Storm hits coast"
 
 
+def test_site_name_and_section_suffix_is_removed():
+    head = '<meta property="og:title" content="Senate passes the budget bill | CNN Politics">'
+    head += '<meta property="og:site_name" content="CNN">'
+    assert extract_metadata(page(head)).title == "Senate passes the budget bill"
+    # a slogan after the name, with a separator of its own
+    head = '<meta property="og:title" content="Inner Range adds camera support | Example.news - No. 1">'
+    assert extract_metadata(page(head, url="https://example.news/story")).title == "Inner Range adds camera support"
+    # a first segment naming the site takes the rest with it
+    head = '<meta property="og:title" content="Page Not Found - Three D Radio - South Australia">'
+    head += '<meta property="og:site_name" content="Three D Radio">'
+    assert extract_metadata(page(head)).title == "Page Not Found"
+    # the site's name inside a longer last segment is part of the headline
+    head = '<meta property="og:title" content="Python 3.14 - What is new in Python"><meta property="og:site_name" content="Python">'
+    assert extract_metadata(page(head)).title == "Python 3.14 - What is new in Python"
+
+
 def test_hostname_suffix_is_removed():
     head = '<meta property="og:title" content="Apple ships new firmware update - 9to5Mac">'
     metadata = extract_metadata(page(head, url="https://9to5mac.com/story"))

@@ -24,6 +24,7 @@ from lxml.html import HtmlElement, tostring
 
 from .baseline import block_text
 from .json_metadata import (
+    AUTHOR_LEGAL_FORMS,
     NAME_PARTICLES,
     extract_json,
     extract_json_parse_error,
@@ -328,6 +329,42 @@ def strip_site_suffix(title: str, sitename: str | None, hostname: str | None) ->
     # the site name allows a short extra word ('Site Blog'), host labels match at any length
     if names_site(sitename or "", last, 4) or any(names_site(label, last, len(last)) for label in labels):
         return parts[0]
+    return title
+
+
+# a separator between title segments; a headline may hold one itself ("X - and Y - Site")
+TITLE_SEGMENT_SEPARATOR = re.compile(r"\s[|–—•·-]\s+")
+# a publisher's legal name: "The North Central Review Pty Ltd" brands its pages without the form
+SITENAME_LEGAL_FORM = re.compile(rf"(?:[\s,]+(?:{'|'.join(sorted(AUTHOR_LEGAL_FORMS))})\.?)+$", flags=re.IGNORECASE)
+
+
+def _site_key(value: str) -> str:
+    value = re.sub(r"^the\s+", "", value.strip(), flags=re.IGNORECASE)
+    return re.sub(r"[^0-9a-z]+", "", value.casefold())
+
+
+def strip_site_section(title: str, sitename: str | None, hostname: str | None) -> str:
+    """Remove a last title segment that starts with the site's name and goes on.
+
+    strip_site_suffix() takes a segment that names the site, with a short word at most ("Site
+    Blog"). A section or a slogan after the name is branding too: "Senate passes the budget bill |
+    CNN Politics" for the site "CNN", "Game Changer | GRAZIA Fashion Editorial", and "Inner Range
+    adds cameras | SEN.news - No. 1", where the slogan holds a separator of its own. The title is
+    cut at the first separator whose remainder starts with the site or host name; earlier ones
+    belong to the headline, which keeps ten characters at least.
+    """
+    owners = [_site_key(SITENAME_LEGAL_FORM.sub("", sitename or ""))]
+    if hostname:
+        owners.append(_site_key(hostname.removeprefix("www.").split(".", 1)[0]))
+        owners.append(_site_key(hostname.removeprefix("www.")))
+    owners = [owner for owner in owners if len(owner) >= 3]
+    stripped = title.strip()
+    for separator in TITLE_SEGMENT_SEPARATOR.finditer(stripped):
+        head, rest = stripped[: separator.start()], stripped[separator.end() :]
+        if len(head) < 10 or not 3 <= len(rest) <= 40 or any(char in rest for char in "|–—•·"):
+            continue
+        if any(_site_key(rest).startswith(owner) for owner in owners):
+            return head.strip()
     return title
 
 
@@ -885,6 +922,7 @@ def extract_metadata(
             metadata.title = headline
         else:
             metadata.title = strip_site_suffix(metadata.title, metadata.sitename, metadata.hostname)
+            metadata.title = strip_site_section(metadata.title, metadata.sitename, metadata.hostname)
     # a dot in the first segment means a host or junk, e.g. 'cdn.org/i.jpg'
     image = metadata.image
     if image and metadata.url and not image.startswith(("http://", "https://")):
