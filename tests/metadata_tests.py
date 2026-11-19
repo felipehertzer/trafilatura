@@ -837,7 +837,8 @@ def test_tei_publisher_from_hostname():
         ("Election results - BBC", None, "https://news.bbc.co.uk/a", "Election results"),
         # the site name plus a short word names the site, plus more words it does not
         ("Release notes - Example Blog", "Example", None, "Release notes"),
-        ("Release notes - Example Media", "Example", None, "Release notes - Example Media"),
+        # here a last segment that starts with the site name is its section or slogan (strip_site_section)
+        ("Release notes - Example Media", "Example", None, "Release notes"),
         ("Python 3.14 - What is new in Python", "Python", None, "Python 3.14 - What is new in Python"),
     ],
 )
