@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from configparser import ConfigParser
 from functools import partial
 from importlib.metadata import version
+from importlib.util import find_spec
 from io import BytesIO
 from time import sleep
 from typing import Any
@@ -31,11 +32,13 @@ from .utils import (
     make_chunks,
 )
 
-try:
+# urllib3's SOCKS module warns when it is imported without PySocks:
+# look for PySocks itself, importing nothing
+if find_spec("socks") is not None:
     from urllib3.contrib.socks import SOCKSProxyManager
 
     PROXY_URL = os.environ.get("http_proxy")
-except ImportError:
+else:
     PROXY_URL = None
 
 try:
