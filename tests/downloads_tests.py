@@ -6,6 +6,7 @@ Unit tests for download functions from the trafilatura library.
 import gzip
 import logging
 import os
+import subprocess
 import sys
 import zlib
 
@@ -726,6 +727,48 @@ def test_pycurl_proxy_skips_ssrf_hook(monkeypatch):
     assert _send_pycurl_request("https://example.org/", True, DEFAULT_CONFIG) is not None
     assert pycurl.OPENSOCKETFUNCTION not in opts
     assert opts[pycurl.PRE_PROXY] == "socks5://localhost:1080"
+
+
+def _import_downloads(prelude: str, check: str, proxy: str | None) -> subprocess.CompletedProcess:
+    "Import the module in a fresh interpreter where a missing optional dependency of urllib3 is an error."
+    env = {key: value for key, value in os.environ.items() if key != "http_proxy"}
+    if proxy:
+        env["http_proxy"] = proxy
+    code = (
+        "import sys, warnings\n"
+        "from urllib3.exceptions import DependencyWarning\n"
+        "warnings.simplefilter('error', DependencyWarning)\n"
+        f"{prelude}\n"
+        "import trafilatura.downloads as dl\n"
+        f"{check}\n"
+    )
+    return subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=False)
+
+
+@pytest.mark.parametrize("proxy", [None, "socks5://localhost:1080"])
+def test_import_without_pysocks(proxy):
+    "Without PySocks the module loads with no proxy and no warning: urllib3's SOCKS module is left alone."
+    result = _import_downloads(
+        "sys.modules['socks'] = None",  # as if PySocks were not installed
+        "assert dl.PROXY_URL is None, dl.PROXY_URL\nassert 'urllib3.contrib.socks' not in sys.modules",
+        proxy,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("proxy", [None, "socks5://localhost:1080"])
+def test_import_with_pysocks(proxy):
+    "With PySocks the SOCKS manager is loaded and the proxy is read from the environment."
+    result = _import_downloads(
+        "import importlib.machinery, types\n"
+        "socks = types.ModuleType('socks')\n"
+        "socks.__spec__ = importlib.machinery.ModuleSpec('socks', None)\n"
+        "sys.modules['socks'] = socks",  # as if PySocks were installed
+        f"assert dl.PROXY_URL == {proxy!r}, dl.PROXY_URL\n"
+        "assert dl.SOCKSProxyManager is sys.modules['urllib3.contrib.socks'].SOCKSProxyManager",
+        proxy,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_proxy_plumbing(monkeypatch):
