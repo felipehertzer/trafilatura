@@ -553,7 +553,8 @@ def _is_meta_label_only(elem: HtmlElement) -> bool:
 # or sitting in a link around a card with a heading or a title, is the card. A heading naming the
 # author (an author class, rel="author") is the byline's own.
 AUTHOR_MENTION = re.compile("[Aa]uthor")
-TEASER_TITLE_CLASS = re.compile(r"(?:^|\s)(?:title|headline)(?:\s|$)")
+# "title" or "headline" as a class token or its last part ("entry-title", "card__headline"), not "subtitle"
+TEASER_TITLE_CLASS = re.compile(r"(?:^|\s)(?:[\w-]*[-_])?(?:title|headline)(?:\s|$)")
 
 
 def _is_teaser(elem: HtmlElement) -> bool:

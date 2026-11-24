@@ -1203,6 +1203,12 @@ def test_a_teaser_for_another_story_is_no_byline():
         'Two dead in crash</h3><div class="teaser__footer"><div class="teaser__author">By Ivy Jensen</div></div></div></a>'
     )
     assert extract_metadata(page(body=f"<h1>Basin issues need resolving</h1><p>{PARAGRAPH}</p>{card}")).author is None
+    # a card whose title is a span with a prefixed class (Colac Herald's latest stories)
+    card = (
+        '<a class="dmc-card" href="/2026/11/court-learns"><div class="entry-meta"><span class="entry-title">'
+        'Court learns of wildlife controller actions</span><span class="entry-author">Ashleigh Wyss</span></div></a>'
+    )
+    assert extract_metadata(page(body=f"<h1>New plan to tackle Colac carp</h1><p>{PARAGRAPH}</p>{card}")).author is None
     # an author box whose heading links to the author's page is the byline's own
     box = '<div class="author-box"><h4 class="author-name"><a href="/author/jane-doe">Jane Doe</a></h4></div>'
     assert extract_metadata(page(body=f"<h1>Basin issues need resolving</h1><p>{PARAGRAPH}</p>{box}")).author == ("Jane Doe")
