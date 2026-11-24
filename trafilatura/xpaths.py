@@ -636,14 +636,18 @@ def _author_any(tree: HtmlElement) -> list[HtmlElement]:
 
 
 def _author_discard(tree: HtmlElement) -> list[HtmlElement]:
-    "Comments, titles, dates and other sections misleading author detection."
+    """Comments, titles, dates and other sections misleading author detection. One holding an h1 is the page's
+    wrapper, not a section beside the story ("gh-post-page--with-sidebar" holds Ghost's whole story)."""
     return [
         elem
         for elem in tree.iter("a", "div", "section", "span")
-        if elem.get("class") in ("title", "date")
-        or AUTHOR_DISCARD_ID.search(elem.get("id", ""))
-        or AUTHOR_DISCARD_CLASS.search(elem.get("class", ""))
-        or "Figure" in elem.get("data-component", "")
+        if (
+            elem.get("class") in ("title", "date")
+            or AUTHOR_DISCARD_ID.search(elem.get("id", ""))
+            or AUTHOR_DISCARD_CLASS.search(elem.get("class", ""))
+            or "Figure" in elem.get("data-component", "")
+        )
+        and next(elem.iter("h1"), None) is None
     ]
 
 

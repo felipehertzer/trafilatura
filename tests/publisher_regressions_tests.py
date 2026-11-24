@@ -1214,6 +1214,24 @@ def test_a_teaser_for_another_story_is_no_byline():
     assert extract_metadata(page(body=f"<h1>Basin issues need resolving</h1><p>{PARAGRAPH}</p>{box}")).author == ("Jane Doe")
 
 
+def test_a_wrapper_holding_the_headline_is_read_for_the_byline():
+    # Ghost's page wrapper "gh-post-page--with-sidebar" holds the whole story, byline included; the "sidebar"
+    # discard took it, and the byline came from the cards after the story (The Buloke Times, Barossa Leader)
+    story = (
+        '<div class="gh-post-page--with-sidebar"><article><header><h1>Derby Day in the Country</h1>'
+        '<p class="gh-post-page__excerpt">A strong breeze swept across the racecourse on Saturday.</p>'
+        '<div class="gh-post-page__author-name"><span>by</span> <a href="/author/blake/">Blake Lee</a></div></header>'
+        "<p>Only for paid members</p></article></div>"
+    )
+    cards = (
+        '<section><h2>Read More</h2><div class="gh-post-info__author-wrapper"><span>by</span> '
+        '<a href="/author/buloke-times/" class="gh-post-info__author-link">Buloke Times</a></div></section>'
+    )
+    assert extract_metadata(page(body=story + cards)).author == "Blake Lee"
+    head = ld({"@context": "https://schema.org", "@type": "Article", "author": {"@type": "Person", "name": "Blake Lee"}})
+    assert extract_metadata(page(head, story + cards)).author == "Blake Lee"
+
+
 def test_a_syndicator_or_a_role_after_the_comma_is_no_second_author():
     # North East Media's motoring column and school pieces
     assert normalize_authors(None, "By DEREK OGDEN, MARQUE MOTORING") == "Derek Ogden"
